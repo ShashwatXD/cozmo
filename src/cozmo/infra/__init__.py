@@ -1,1 +1,1 @@
-"""Infrastructure — adapters that implement domain ports."""
+"""Infrastructure - adapters that implement domain ports."""

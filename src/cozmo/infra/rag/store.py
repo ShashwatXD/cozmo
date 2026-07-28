@@ -4,7 +4,6 @@ In-memory / JSON vector store.
 What: store chunk + embedding; cosine top-k search; save/load.
 Why: tiny local "vector DB" for learning (Chroma/Pinecone later).
 Layer: infra.
-Flutter: local cache of embeddings + similarity sort.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ def cosine(a: list[float], b: list[float]) -> float:
 
 
 class VectorStore:
-    """Flutter: List of {chunk, vector} with search()."""
+    """In-memory chunk embeddings with cosine top-k search."""
 
     def __init__(self) -> None:
         self._items: list[tuple[Chunk, list[float]]] = []

@@ -4,7 +4,6 @@ Load versioned system prompts from prompts/.
 What: read text files that become the system message.
 Why: prompts are not hardcoded inside the agent loop (DRY + versionable).
 Layer: small helper used by app (files are content, not infra SDKs).
-Flutter: like loading copy from ARB / asset strings.
 """
 
 from pathlib import Path

@@ -4,7 +4,6 @@ Wiring: Settings → LLM adapter (+ retries).
 What: factory that returns an LLMClient.
 Why: swap stub/openai/ollama by config; wrap with retries (DI).
 Layer: infra.
-Flutter: get_it registration + Dio interceptor.
 """
 
 from cozmo.domain.ports import LLMClient
@@ -20,7 +19,6 @@ def build_llm(settings: Settings) -> LLMClient:
     inner = _build_inner(settings)
     if settings.max_retries <= 1:
         return inner
-    # Flutter: wrap repository with retry interceptor
     return RetryingLLMClient(inner, max_attempts=settings.max_retries)
 
 

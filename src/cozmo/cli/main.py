@@ -1,12 +1,11 @@
 """
-CLI View — terminal I/O only.
+Cozmo CLI - chat, agent, index, eval.
 
 Commands:
-  cozmo chat   — plain LLM (multi-turn if no -m)
-  cozmo agent  — ReAct + tools (multi-turn if no -m)
-  cozmo index  — build RAG index for a workdir
-
-Layer: View. Flutter: Widget.
+  cozmo chat   - plain LLM (multi-turn if no -m)
+  cozmo agent  - ReAct coding agent with tools + RAG + memory
+  cozmo index  - build RAG index for a workdir
+  cozmo eval   - run golden-task regression suite
 """
 
 from __future__ import annotations
@@ -19,12 +18,15 @@ import typer
 from cozmo import __version__
 from cozmo.app.agent import AgentRunner
 from cozmo.app.chat import ChatUseCase
+from cozmo.app.eval_runner import run_eval
 from cozmo.domain.completion import Usage
 from cozmo.domain.cost import format_cost_line
 from cozmo.domain.memory import ConversationMemory
 from cozmo.infra.llm.factory import build_llm
-from cozmo.infra.rag import HashingEmbedder, RepoIndexer, VectorStore
-from cozmo.infra.rag.paths import default_embedder, index_path, load_store
+from cozmo.infra.rag import RepoIndexer, VectorStore
+from cozmo.infra.rag.factory import build_embedder
+from cozmo.infra.rag.paths import index_path, load_store
+from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools import build_default_registry
 from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolExecutor
@@ -32,9 +34,22 @@ from cozmo.settings import Settings, load_settings
 
 app = typer.Typer(
     name="cozmo",
-    help="Cozmo — CLI coding assistant.",
+    help="Cozmo - production-style CLI coding agent.",
     no_args_is_help=True,
 )
+
+
+def _apply_provider(
+    settings: Settings,
+    provider: Optional[str],
+    model: Optional[str],
+) -> Settings:
+    data = settings.model_dump()
+    if provider:
+        data["provider"] = provider
+    if model:
+        data["model"] = model
+    return Settings(**data)
 
 
 @app.callback(invoke_without_command=True)
@@ -51,20 +66,20 @@ def root(
 
 @app.command("chat")
 def chat(
-    message: Optional[str] = typer.Option(
-        None,
-        "--message",
-        "-m",
-        help="One-shot message (omit for multi-turn REPL)",
-    ),
+    message: Optional[str] = typer.Option(None, "--message", "-m"),
     stream: bool = typer.Option(True, "--stream/--no-stream"),
     json_mode: bool = typer.Option(False, "--json"),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", "-p", help="stub | openai | ollama (overrides .env)"
+    ),
+    model: Optional[str] = typer.Option(None, "--model", help="Model id override"),
 ) -> None:
     """Plain chat (no tools). Multi-turn when -m is omitted."""
-    settings = load_settings()
+    settings = _apply_provider(load_settings(), provider, model)
     llm = build_llm(settings)
     memory = ConversationMemory(max_messages=settings.memory_max_messages)
     use_case = ChatUseCase(llm, memory=memory, temperature=settings.temperature)
+    typer.secho(f"provider={settings.provider} model={settings.model}", fg="bright_black")
 
     if message is not None:
         _chat_once(
@@ -72,10 +87,7 @@ def chat(
         )
         return
 
-    typer.secho(
-        "chat REPL — memory on. /exit /clear",
-        fg="bright_black",
-    )
+    typer.secho("chat REPL - /exit /clear", fg="bright_black")
     while True:
         try:
             text = typer.prompt("you")
@@ -93,58 +105,58 @@ def chat(
 
 @app.command("agent")
 def agent(
-    message: Optional[str] = typer.Option(
-        None,
-        "--message",
-        "-m",
-        help="One-shot task (omit for multi-turn REPL)",
+    message: Optional[str] = typer.Option(None, "--message", "-m"),
+    workdir: Optional[Path] = typer.Option(None, "--workdir", "-w"),
+    provider: Optional[str] = typer.Option(
+        None, "--provider", "-p", help="stub | openai | ollama (overrides .env)"
     ),
-    workdir: Optional[Path] = typer.Option(
-        None,
-        "--workdir",
-        "-w",
-        help="Workspace root (default: COZMO_WORKDIR)",
-    ),
+    model: Optional[str] = typer.Option(None, "--model", help="Model id override"),
 ) -> None:
-    """Coding agent with tools + conversation memory + optional RAG."""
-    settings = load_settings()
+    """Coding agent: ReAct + tools + memory + RAG + traces."""
+    settings = _apply_provider(load_settings(), provider, model)
     root_dir = (workdir or settings.workdir).resolve()
     guard = WorkspaceGuard(
         root_dir,
         allow_write=settings.allow_write,
         allow_shell=settings.allow_shell,
     )
-    embedder = default_embedder()
+    embedder = build_embedder(settings)
     store = load_store(root_dir)
-    registry = build_default_registry(
-        guard, vector_store=store, embedder=embedder
-    )
+    registry = build_default_registry(guard, vector_store=store, embedder=embedder)
     executor = ToolExecutor(registry)
     llm = build_llm(settings)
     memory = ConversationMemory(max_messages=settings.memory_max_messages)
+    trace_path = root_dir / ".cozmo" / "traces.jsonl"
+    tracer = Tracer(trace_path if settings.trace_enabled else None, enabled=settings.trace_enabled)
     runner = AgentRunner(
         llm,
         registry,
         executor,
         memory=memory,
+        tracer=tracer,
         temperature=settings.temperature,
         max_steps=settings.max_agent_steps,
     )
 
-    typer.secho(f"workdir={root_dir}", fg="bright_black")
+    typer.secho(
+        f"provider={settings.provider} model={settings.model} workdir={root_dir}",
+        fg="bright_black",
+    )
     if len(store) > 0:
-        typer.secho(f"rag chunks={len(store)}", fg="bright_black")
-    else:
         typer.secho(
-            "rag: no index (optional: cozmo index -w ...)",
+            f"rag chunks={len(store)} embedder={settings.embedder}",
             fg="bright_black",
         )
+    else:
+        typer.secho("rag: no index (cozmo index -w ...)", fg="bright_black")
+    if settings.trace_enabled:
+        typer.secho(f"traces → {trace_path}", fg="bright_black")
 
     if message is not None:
         _agent_once(runner, message, settings)
         return
 
-    typer.secho("agent REPL — memory on. /exit /clear", fg="bright_black")
+    typer.secho("agent REPL - /exit /clear", fg="bright_black")
     while True:
         try:
             text = typer.prompt("task")
@@ -162,27 +174,56 @@ def agent(
 
 @app.command("index")
 def index_cmd(
+    workdir: Optional[Path] = typer.Option(None, "--workdir", "-w"),
+    embedder_name: Optional[str] = typer.Option(
+        None,
+        "--embedder",
+        help="hash | openai | ollama (overrides COZMO_EMBEDDER)",
+    ),
+) -> None:
+    """Build RAG index at <workdir>/.cozmo/index.json."""
+    settings = load_settings()
+    if embedder_name:
+        data = settings.model_dump()
+        data["embedder"] = embedder_name
+        settings = Settings(**data)
+    root_dir = (workdir or settings.workdir).resolve()
+    embedder = build_embedder(settings)
+    store = VectorStore()
+    n = RepoIndexer(embedder, store).index_dir(root_dir)
+    out = index_path(root_dir)
+    store.save(out)
+    typer.echo(
+        f"Indexed {n} chunks with embedder={settings.embedder} → {out}"
+    )
+
+
+@app.command("eval")
+def eval_cmd(
     workdir: Optional[Path] = typer.Option(
         None,
         "--workdir",
         "-w",
-        help="Workspace to index (default: COZMO_WORKDIR)",
+        help="Fixture repo (default: tests/fixtures/tiny_repo)",
+    ),
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help="Use configured LLM provider instead of stub scripts",
     ),
 ) -> None:
-    """
-    Build a local RAG index under <workdir>/.cozmo/index.json.
-
-    Flutter: precompute a search index offline, then query at runtime.
-    """
+    """Run golden-task eval suite (CI-safe stub by default)."""
     settings = load_settings()
-    root_dir = (workdir or settings.workdir).resolve()
-    embedder = HashingEmbedder()
-    store = VectorStore()
-    indexer = RepoIndexer(embedder, store)
-    n = indexer.index_dir(root_dir)
-    out = index_path(root_dir)
-    store.save(out)
-    typer.echo(f"Indexed {n} chunks → {out}")
+    root = workdir or Path("tests/fixtures/tiny_repo")
+    root = root.resolve()
+    results = run_eval(root, settings=settings, live=live)
+    passed = sum(1 for r in results if r.passed)
+    for r in results:
+        mark = "PASS" if r.passed else "FAIL"
+        typer.secho(f"[{mark}] {r.case_id}: {r.detail[:120]}", fg="green" if r.passed else "red")
+    typer.echo(f"\n{passed}/{len(results)} passed")
+    if passed != len(results):
+        raise typer.Exit(code=1)
 
 
 def _chat_once(
@@ -211,10 +252,10 @@ def _chat_once(
 def _agent_once(runner: AgentRunner, text: str, settings: Settings) -> None:
     for event in runner.run_events(text):
         if event.kind == "tool_call":
-            typer.secho(f"→ tool {event.tool_name}({event.text})", fg="cyan")
+            typer.secho(f"-> tool {event.tool_name}({event.text})", fg="cyan")
         elif event.kind == "tool_result":
-            preview = event.text if len(event.text) < 400 else event.text[:400] + "…"
-            typer.secho(f"← {event.tool_name}: {preview}", fg="bright_black")
+            preview = event.text if len(event.text) < 400 else event.text[:400] + "..."
+            typer.secho(f"<- {event.tool_name}: {preview}", fg="bright_black")
         elif event.kind == "assistant":
             typer.echo(event.text)
         elif event.kind == "done" and event.text:

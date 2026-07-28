@@ -4,7 +4,6 @@ Text chunking for RAG.
 What: split file text into overlapping chunks with line numbers.
 Why: embeddings work on passages, not whole repos.
 Layer: infra/rag (pure-ish helper).
-Flutter: like paging a long String into windows.
 """
 
 from __future__ import annotations
@@ -22,7 +21,6 @@ def chunk_text(
     """
     Chunk by characters on line boundaries when possible.
 
-    Flutter: splitting a long document for LazyList sections.
     """
     if not text.strip():
         return []

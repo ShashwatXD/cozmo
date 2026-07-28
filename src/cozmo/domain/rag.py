@@ -1,10 +1,9 @@
 """
-RAG types — chunks and search hits.
+RAG types - chunks and search hits.
 
 What: Chunk, SearchHit.
 Why: one shape for indexer, store, and semantic_search tool.
 Layer: domain.
-Flutter: Freezed models for search results.
 """
 
 from __future__ import annotations

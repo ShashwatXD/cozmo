@@ -1,10 +1,9 @@
 """
-Workspace permissions — keep tools inside the project.
+Workspace permissions - keep tools inside the project.
 
 What: resolve paths under workdir; gate write/shell.
 Why: agents that can edit code need a sandbox (security basics).
 Layer: infra (policy used by tools).
-Flutter: like checking storage permission before File.write.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ class PermissionError_(Exception):
 
 
 class WorkspaceGuard:
-    """Flutter: path + capability checks before repository side-effects."""
+    """Path and capability checks before tool side-effects."""
 
     def __init__(
         self,

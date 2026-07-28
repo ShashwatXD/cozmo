@@ -1,14 +1,8 @@
-"""
-Agent runner — ReAct loop + conversation memory.
-
-What: think → tool calls → observe → repeat; persist turns across prompts.
-Why: tools alone do nothing; memory makes multi-turn coding sessions work.
-Layer: app (ViewModel).
-Flutter: Cubit with List<Message> state + maxSteps loop.
-"""
+"""Agent runner - ReAct loop + conversation memory + optional tracing."""
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -17,14 +11,13 @@ from cozmo.domain.memory import ConversationMemory
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.ports import LLMClient
 from cozmo.domain.tools import ToolResult
+from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools.registry import ToolExecutor, ToolRegistry
 from cozmo.prompts.loader import load_system_prompt
 
 
 @dataclass(frozen=True)
 class AgentEvent:
-    """Flutter: state emissions the UI listens to."""
-
     kind: str  # assistant | tool_call | tool_result | done
     text: str = ""
     tool_name: str = ""
@@ -39,12 +32,8 @@ class AgentResult:
 
 class AgentRunner:
     """
-    ReAct-style loop with optional multi-turn memory:
-
-      prior memory + new user message
-        → LLM (with tool schemas)
-        → if tool_calls: execute → append results → LLM again
-        → else: final answer → save history into memory
+    ReAct loop: prior memory + user message -> LLM (+ tools) ->
+    execute tool_calls -> observe -> repeat until final answer.
     """
 
     def __init__(
@@ -54,6 +43,7 @@ class AgentRunner:
         executor: ToolExecutor,
         *,
         memory: ConversationMemory | None = None,
+        tracer: Tracer | None = None,
         system_prompt: str | None = None,
         temperature: float = 0.2,
         max_steps: int = 8,
@@ -62,6 +52,7 @@ class AgentRunner:
         self._registry = registry
         self._executor = executor
         self._memory = memory if memory is not None else ConversationMemory()
+        self._tracer = tracer
         self._system_prompt = system_prompt or load_system_prompt("agent")
         self._temperature = temperature
         self._max_steps = max_steps
@@ -78,7 +69,6 @@ class AgentRunner:
         return self.last_result
 
     def run_events(self, user_text: str) -> Iterator[AgentEvent]:
-        # Flutter: state.messages + new user bubble
         messages: list[Message] = [
             *self._memory.for_prompt(self._system_prompt),
             Message(role=Role.USER, content=user_text),
@@ -88,12 +78,23 @@ class AgentRunner:
         self.last_result = None
 
         for step in range(1, self._max_steps + 1):
+            t0 = time.perf_counter()
             result: CompletionResult = self._llm.complete(
                 messages,
                 temperature=self._temperature,
                 tools=tools,
             )
+            latency_ms = (time.perf_counter() - t0) * 1000
             total_usage = total_usage.merged(result.usage)
+            if self._tracer:
+                self._tracer.emit(
+                    "llm",
+                    step=step,
+                    latency_ms=round(latency_ms, 1),
+                    tokens=result.usage.total_tokens,
+                    tool_calls=[tc.name for tc in result.tool_calls],
+                    finish_reason=result.finish_reason,
+                )
 
             if result.content and result.has_tool_calls:
                 yield AgentEvent(kind="assistant", text=result.content)
@@ -108,6 +109,12 @@ class AgentRunner:
                     usage=total_usage,
                     steps=step,
                 )
+                if self._tracer:
+                    self._tracer.emit(
+                        "agent_done",
+                        steps=step,
+                        tokens=total_usage.total_tokens,
+                    )
                 yield AgentEvent(kind="done", text=result.content or "")
                 return
 
@@ -125,7 +132,15 @@ class AgentRunner:
                     text=call.arguments,
                     tool_name=call.name,
                 )
+                t1 = time.perf_counter()
                 tool_result: ToolResult = self._executor.execute(call)
+                if self._tracer:
+                    self._tracer.emit(
+                        "tool",
+                        name=call.name,
+                        is_error=tool_result.is_error,
+                        latency_ms=round((time.perf_counter() - t1) * 1000, 1),
+                    )
                 yield AgentEvent(
                     kind="tool_result",
                     text=tool_result.content,
@@ -148,10 +163,16 @@ class AgentRunner:
         self.last_result = AgentResult(
             final_text=text, usage=total_usage, steps=self._max_steps
         )
+        if self._tracer:
+            self._tracer.emit(
+                "agent_done",
+                steps=self._max_steps,
+                tokens=total_usage.total_tokens,
+                max_steps=True,
+            )
         yield AgentEvent(kind="done", text=text)
 
     def _commit_memory(self, messages: list[Message]) -> None:
-        """Persist non-system messages so the next user turn remembers this one."""
         self._memory.replace_history(
             [m for m in messages if m.role != Role.SYSTEM]
         )

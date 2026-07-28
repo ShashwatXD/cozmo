@@ -4,7 +4,6 @@ Embedders.
 What: HashingEmbedder (local, no network) for Core RAG demos + tests.
 Why: teach the RAG pipeline without pulling a second Ollama model.
 Layer: infra.
-Flutter: FakeEmbeddingRepo vs Firebase — here hash vs later OpenAI.
 
 Note: hashing is lexical overlap, not true semantics. Same pipeline
 swaps to a real model later (interview talking point).
@@ -24,7 +23,6 @@ class HashingEmbedder:
     """
     Bag-of-tokens hashed into a fixed vector (dim=256).
 
-    Flutter: a deterministic Fake that still lets similarity search work
     when queries share words with chunks (great for code identifiers).
     """
 

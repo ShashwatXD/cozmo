@@ -1,10 +1,9 @@
 """
-Stub LLM — fake provider for wiring + tests.
+Stub LLM - fake provider for wiring + tests.
 
 What: implements LLMClient without network; can script tool calls.
 Why: CI never needs an API key; agent loop is testable.
 Layer: infra.
-Flutter: FakeAuthRepository.
 """
 
 from __future__ import annotations
@@ -18,7 +17,6 @@ from cozmo.domain.tools import ToolCall, ToolSpec
 
 class StubLLMClient:
     """
-    Flutter: FakeAuthRepository.
 
     Scripted tool calls apply to each new user turn:
     - first complete after a USER → return tool_calls (if scripted)

@@ -4,7 +4,6 @@ Retry wrapper around any LLMClient.
 What: retries transient failures (timeout, connection, rate limit).
 Why: production gateways don't fail the user on one blip.
 Layer: infra decorator.
-Flutter: Dio interceptor that retries 5xx / timeouts.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ _RETRYABLE = (
 
 
 class RetryingLLMClient:
-    """Flutter: repository decorator / Dio retry interceptor."""
+    """Decorator that retries transient failures on an inner LLMClient."""
 
     def __init__(self, inner: LLMClient, *, max_attempts: int = 3) -> None:
         self._inner = inner

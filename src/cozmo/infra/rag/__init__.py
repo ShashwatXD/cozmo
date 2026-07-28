@@ -1,4 +1,4 @@
-"""RAG package — chunk, embed, store, index."""
+"""RAG package - chunk, embed, store, index."""
 
 from cozmo.infra.rag.embedder import HashingEmbedder
 from cozmo.infra.rag.indexer import RepoIndexer

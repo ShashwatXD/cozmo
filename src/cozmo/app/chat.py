@@ -1,11 +1,4 @@
-"""
-Chat use-case (simple, no tools) + conversation memory.
-
-What: multi-turn chat with sliding-window history.
-Why: follow-up questions need prior context.
-Layer: app (ViewModel).
-Flutter: ChatCubit holding List<Message>.
-"""
+"""Chat use-case - multi-turn chat without tools."""
 
 from collections.abc import Iterator
 
@@ -17,8 +10,6 @@ from cozmo.prompts.loader import load_system_prompt
 
 
 class ChatUseCase:
-    """Flutter: ChatCubit — depends on LLMClient port, not openai."""
-
     def __init__(
         self,
         llm: LLMClient,

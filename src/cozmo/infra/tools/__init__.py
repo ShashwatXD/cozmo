@@ -105,7 +105,7 @@ def build_default_registry(
     vector_store: Any | None = None,
     embedder: Any | None = None,
 ) -> ToolRegistry:
-    """Flutter: register use-cases into get_it."""
+    """Register default workspace tools (read, write, search, git, optional RAG)."""
     reg = ToolRegistry()
 
     def read_file(args: dict[str, Any]) -> str:

@@ -1,1 +1,1 @@
-"""Telemetry stubs — Phase 2+ will log tokens/cost here."""
+"""Telemetry stubs - Phase 2+ will log tokens/cost here."""

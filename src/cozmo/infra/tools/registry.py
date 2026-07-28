@@ -4,7 +4,6 @@ Tool registry + executor.
 What: name → tool handler; validate JSON args; run; return ToolResult.
 Why: agent loop never hardcodes tools (open/closed principle).
 Layer: infra (+ used by app).
-Flutter: map of String → UseCase, then execute by name.
 """
 
 from __future__ import annotations
@@ -20,7 +19,6 @@ from cozmo.domain.tools import ToolCall, ToolResult, ToolSpec
 @dataclass
 class RegisteredTool:
     spec: ToolSpec
-    # Flutter: UseCase.call(params)
     handler: Callable[[dict[str, Any]], str]
 
 
@@ -64,7 +62,7 @@ class ToolExecutor:
                 content=content,
                 is_error=False,
             )
-        except Exception as exc:  # noqa: BLE001 — feed error back to the model
+        except Exception as exc:  # noqa: BLE001 - feed error back to the model
             return ToolResult(
                 tool_call_id=call.id,
                 name=call.name,

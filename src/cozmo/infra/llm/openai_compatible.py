@@ -2,9 +2,8 @@
 OpenAI-compatible chat adapter (tools + stream).
 
 What: talks to OpenAI OR Ollama via the `openai` SDK.
-Why: one adapter, two providers — base_url switches the backend.
+Why: one adapter, two providers - base_url switches the backend.
 Layer: infra.
-Flutter: Dio/http client behind AuthRepository.
 """
 
 from __future__ import annotations
@@ -55,7 +54,7 @@ def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
 
 
 class OpenAICompatibleClient:
-    """Flutter: FirebaseAuthRepository implements AuthRepository."""
+    """LLMClient via OpenAI-compatible HTTP API."""
 
     def __init__(
         self,

@@ -4,7 +4,6 @@ Completion results shared across providers.
 What: CompletionResult + token Usage (+ optional tool_calls).
 Why: one return shape for stub/openai/ollama (DRY).
 Layer: domain.
-Flutter: like a Freezed ApiResponse model.
 """
 
 from dataclasses import dataclass, field

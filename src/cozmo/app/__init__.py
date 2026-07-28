@@ -1,1 +1,1 @@
-"""Application / ViewModel layer — orchestration, no vendor SDKs."""
+"""Application / ViewModel layer - orchestration, no vendor SDKs."""

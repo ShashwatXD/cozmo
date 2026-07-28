@@ -1,10 +1,9 @@
 """
-Repository indexer — walk files → chunk → embed → store.
+Repository indexer - walk files → chunk → embed → store.
 
 What: Indexer service used by `cozmo index`.
 Why: one place builds the RAG index the agent searches.
 Layer: app/infra boundary (app use-case style).
-Flutter: a UseCase that fills a local search index.
 """
 
 from __future__ import annotations

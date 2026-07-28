@@ -1,11 +1,4 @@
-"""
-Ports — contracts the app depends on.
-
-What: LLMClient Protocol (complete + stream + tools).
-Why: ViewModel talks to an abstraction; OpenAI/Ollama are adapters.
-Layer: domain (Model). Must NOT import openai/httpx.
-Flutter: like `abstract class AuthRepository`.
-"""
+"""LLM ports - ViewModel depends on these abstractions, not vendor SDKs."""
 
 from collections.abc import Iterator
 from typing import Protocol, runtime_checkable
@@ -17,8 +10,6 @@ from cozmo.domain.tools import ToolSpec
 
 @runtime_checkable
 class LLMClient(Protocol):
-    """Flutter: AuthRepository — app depends on this, not on a vendor SDK."""
-
     def complete(
         self,
         messages: list[Message],
@@ -36,9 +27,5 @@ class LLMClient(Protocol):
         *,
         temperature: float = 0.2,
     ) -> Iterator[str]:
-        """
-        Yield text chunks as they arrive (no tools — agent uses complete()).
-
-        Flutter: like a Stream<String> the UI listens to (StreamBuilder).
-        """
+        """Yield text chunks (no tools; agent uses complete())."""
         ...

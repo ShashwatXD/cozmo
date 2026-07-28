@@ -1,1 +1,1 @@
-"""CLI package — View layer only."""
+"""CLI package - View layer only."""
