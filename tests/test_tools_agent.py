@@ -54,7 +54,6 @@ def test_shell_disabled(tmp_path: Path) -> None:
 
 
 def test_agent_loop_with_scripted_tools() -> None:
-    # Flutter: Cubit with FakeRepo that returns a "use tool" then "done"
     call = ToolCall(
         id="call_1",
         name="read_file",

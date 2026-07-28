@@ -24,7 +24,6 @@ class _Flaky:
 
 
 def test_retry_then_success() -> None:
-    # Flutter: Dio retries twice then OK
     inner = _Flaky(fails=2)
     llm = RetryingLLMClient(inner, max_attempts=3)
     result = llm.complete([Message(role=Role.USER, content="hi")])

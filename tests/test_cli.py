@@ -10,7 +10,6 @@ runner = CliRunner()
 
 
 def _stub_env(monkeypatch) -> None:
-    # Flutter: override Provider with Fake — tests must not call real backends
     monkeypatch.setenv("COZMO_PROVIDER", "stub")
     monkeypatch.setenv("COZMO_MODEL", "stub-model")
     # Prevent repo .env openai/ollama from winning over process env... 
