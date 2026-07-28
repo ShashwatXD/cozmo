@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cozmo"
+version = "0.1.0"
+description = "CLI coding assistant — agent runtime for learning production AI eng"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # CLI commands (cozmo chat) — nicer than raw argparse
+    "typer>=0.12",
+    # Typed settings from env — like Freezed + AppConfig
+    "pydantic-settings>=2.0",
+    # Load .env file into process env — like flutter_dotenv
+    "python-dotenv>=1.0",
+    # OpenAI SDK — also talks to Ollama via base_url (Phase 1)
+    "openai>=1.40",
+    # Retries with exponential backoff (Phase 2) — like a Dio retry interceptor
+    "tenacity>=8.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+# After `pip install -e .`, typing `cozmo` runs this function
+cozmo = "cozmo.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cozmo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
