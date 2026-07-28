@@ -2,29 +2,29 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Cozmo: chat (one-shot)",
+      "name": "Cozmo: chat (OpenAI override)",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
-      "args": ["chat", "-m", "hello from debugger"],
+      "args": ["chat", "-p", "openai", "--model", "gpt-4o-mini", "-m", "Say hello in one sentence"],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
       "console": "integratedTerminal"
     },
     {
-      "name": "Cozmo: chat REPL (memory)",
+      "name": "Cozmo: chat (Ollama)",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
-      "args": ["chat"],
+      "args": ["chat", "-p", "ollama", "--model", "qwen2.5:3b", "-m", "Say hello in one sentence"],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
       "console": "integratedTerminal"
     },
     {
-      "name": "Cozmo: agent (one-shot)",
+      "name": "Cozmo: agent (fixture)",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
@@ -41,15 +41,11 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "Cozmo: agent REPL (memory)",
+      "name": "Cozmo: agent REPL",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
-      "args": [
-        "agent",
-        "-w",
-        "${workspaceFolder}/tests/fixtures/tiny_repo"
-      ],
+      "args": ["agent", "-w", "${workspaceFolder}/tests/fixtures/tiny_repo"],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
@@ -60,28 +56,18 @@
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
-      "args": [
-        "index",
-        "-w",
-        "${workspaceFolder}/tests/fixtures/tiny_repo"
-      ],
+      "args": ["index", "-w", "${workspaceFolder}/tests/fixtures/tiny_repo"],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
       "console": "integratedTerminal"
     },
     {
-      "name": "Cozmo: agent + semantic_search",
+      "name": "Cozmo: eval",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
-      "args": [
-        "agent",
-        "-w",
-        "${workspaceFolder}/tests/fixtures/tiny_repo",
-        "-m",
-        "Use semantic_search to find the off-by-one bug and explain it."
-      ],
+      "args": ["eval", "-w", "${workspaceFolder}/tests/fixtures/tiny_repo"],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
