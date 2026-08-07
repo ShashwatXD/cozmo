@@ -113,10 +113,3 @@ tests/
 docs/
 ```
 
-## Configuration
-
-See `.env.example`. All knobs use prefix `COZMO_`.
-
-## License
-
-MIT (add a LICENSE file if you publish the repo).
