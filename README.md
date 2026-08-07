@@ -87,19 +87,6 @@ Dependency rule: **domain never imports openai**. Infra implements ports.
 | `cozmo eval` | Golden regression suite |
 | `cozmo --version` | Version |
 
-## Resume / skills demonstrated
-
-Use these as bullet inspiration (edit for honesty):
-
-- Built a **provider-agnostic LLM gateway** (OpenAI + Ollama) with **retries, timeouts, and cost estimation**
-- Implemented a **ReAct agent runtime** with **function/tool calling**, schema validation, and tool error recovery
-- Designed **clean architecture** (ports & adapters / dependency inversion) for swappable models and tools
-- Added **RAG**: chunking, pluggable embeddings, vector similarity search, semantic retrieval tool
-- Built **conversation memory** with context-window pruning for multi-turn sessions
-- Enforced **tool sandboxing** (workspace boundaries, capability flags for write/shell)
-- Added **observability** (structured JSONL traces: latency, tokens, tool calls) and **`cozmo eval` golden-task regression**
-- Delivered a production-minded **Python CLI** (Typer, Pydantic Settings, pytest)
-
 ## Project layout
 
 ```
