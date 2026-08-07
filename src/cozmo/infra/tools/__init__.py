@@ -104,6 +104,8 @@ def build_default_registry(
     *,
     vector_store: Any | None = None,
     embedder: Any | None = None,
+    code_index: Any | None = None,
+    sources: dict[str, str] | None = None,
 ) -> ToolRegistry:
     """Register default workspace tools (read, write, search, git, optional RAG)."""
     reg = ToolRegistry()
@@ -201,6 +203,19 @@ def build_default_registry(
     reg.register(SHELL_SPEC, run_shell)
     reg.register(GIT_STATUS_SPEC, git_status)
     reg.register(GIT_DIFF_SPEC, git_diff)
+
+    # Code intelligence tools (optional - requires a built CodeIndex)
+    if code_index is not None:
+        from cozmo.infra.tools.code_intel import register_code_intel_tools
+
+        register_code_intel_tools(
+            reg,
+            code_index,
+            sources=sources or {},
+            vector_store=vector_store,
+            embedder=embedder,
+        )
+
     return reg
 
 

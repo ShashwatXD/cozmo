@@ -122,7 +122,36 @@ def agent(
     )
     embedder = build_embedder(settings)
     store = load_store(root_dir)
-    registry = build_default_registry(guard, vector_store=store, embedder=embedder)
+
+    code_index = None
+    sources: dict[str, str] = {}
+    code_index_path = root_dir / ".cozmo" / "code_index.json"
+    if code_index_path.is_file():
+        try:
+            from cozmo.domain.index import CodeIndex
+
+            code_index = CodeIndex.load(code_index_path)
+            for rel_path in code_index.files:
+                full = root_dir / rel_path
+                if full.is_file():
+                    try:
+                        sources[rel_path] = full.read_text(encoding="utf-8", errors="ignore")
+                    except OSError:
+                        pass
+            typer.secho(
+                f"code-index: {len(code_index.files)} files",
+                fg="bright_black",
+            )
+        except Exception:
+            pass  # CodeIndex module not yet available
+
+    registry = build_default_registry(
+        guard,
+        vector_store=store,
+        embedder=embedder,
+        code_index=code_index,
+        sources=sources,
+    )
     executor = ToolExecutor(registry)
     llm = build_llm(settings)
     memory = ConversationMemory(max_messages=settings.memory_max_messages)
@@ -196,6 +225,24 @@ def index_cmd(
     typer.echo(
         f"Indexed {n} chunks with embedder={settings.embedder} → {out}"
     )
+
+    # Build CodeIndex for code intelligence tools
+    try:
+        from cozmo.indexer.repository_indexer import RepositoryIndexer as CodeRepoIndexer
+
+        code_indexer = CodeRepoIndexer()
+        code_index = code_indexer.index(root_dir)  # saves code_index.json internally
+        ci_out = root_dir / ".cozmo" / "code_index.json"
+        typer.echo(
+            f"Code index: {len(code_index.files)} files → {ci_out}"
+        )
+    except ImportError:
+        typer.secho(
+            "code-index: skipped (parser/indexer modules not yet installed)",
+            fg="bright_black",
+        )
+    except Exception as exc:
+        typer.secho(f"code-index: error - {exc}", fg="yellow")
 
 
 @app.command("eval")
