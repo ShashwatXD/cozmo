@@ -19,7 +19,6 @@ _EXT_TO_LANG: dict[str, str] = {
 
 _python_parser = PythonASTParser()
 
-
 class SymbolExtractor:
     """Unified entry point for symbol extraction.
 
@@ -39,12 +38,10 @@ class SymbolExtractor:
         if lang == "python":
             return _python_parser.parse(source, path)
 
-        # Try tree-sitter first for non-Python languages
         ts_result = tree_sitter.parse_file(path, source, lang)
         if ts_result is not None:
             return ts_result
 
-        # Regex fallback
         return parse_with_regex(source, path, lang)
 
     @staticmethod

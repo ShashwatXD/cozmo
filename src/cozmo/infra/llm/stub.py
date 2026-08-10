@@ -1,10 +1,4 @@
-"""
-Stub LLM - fake provider for wiring + tests.
-
-What: implements LLMClient without network; can script tool calls.
-Why: CI never needs an API key; agent loop is testable.
-Layer: infra.
-"""
+"""Stub LLM - fake provider for wiring + tests."""
 
 from __future__ import annotations
 
@@ -13,7 +7,6 @@ from collections.abc import Iterator
 from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.tools import ToolCall, ToolSpec
-
 
 class StubLLMClient:
     """
@@ -85,7 +78,6 @@ class StubLLMClient:
         result = self.complete(messages, temperature=temperature)
         for word in (result.content or "ok").split(" "):
             yield word + " "
-
 
 def _messages_since_last_user(messages: list[Message]) -> list[Message]:
     last_user = -1

@@ -7,7 +7,6 @@ from cozmo.domain.completion import CompletionResult
 from cozmo.domain.messages import Message
 from cozmo.domain.tools import ToolSpec
 
-
 @runtime_checkable
 class LLMClient(Protocol):
     def complete(

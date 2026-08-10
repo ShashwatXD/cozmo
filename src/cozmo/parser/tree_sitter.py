@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from cozmo.domain.symbols import FileSymbols
 
-
 def is_available() -> bool:
     """Return True if tree-sitter is installed and usable."""
     try:
@@ -16,7 +15,6 @@ def is_available() -> bool:
         return True
     except ImportError:
         return False
-
 
 def parse_file(path: str, text: str, language: str) -> FileSymbols | None:
     """Parse *text* with tree-sitter. Returns None when unavailable."""

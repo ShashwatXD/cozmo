@@ -1,19 +1,11 @@
-"""
-Workspace permissions - keep tools inside the project.
-
-What: resolve paths under workdir; gate write/shell.
-Why: agents that can edit code need a sandbox (security basics).
-Layer: infra (policy used by tools).
-"""
+"""Workspace permissions - keep tools inside the project."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-
 class PermissionError_(Exception):
     """Raised when a tool tries to leave the sandbox or use a disabled capability."""
-
 
 class WorkspaceGuard:
     """Path and capability checks before tool side-effects."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,18 @@ from typing import Any
 from cozmo.domain.tools import ToolSpec
 from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolRegistry
+
+
+def _line_matches(query: str, line: str) -> bool:
+    """Exact substring, then whitespace-insensitive (so ``a-b`` hits ``a - b``)."""
+    if not query:
+        return False
+    if query in line:
+        return True
+    compact_q = re.sub(r"\s+", "", query)
+    if not compact_q:
+        return False
+    return compact_q in re.sub(r"\s+", "", line)
 
 READ_SPEC = ToolSpec(
     name="read_file",
@@ -37,7 +50,11 @@ WRITE_SPEC = ToolSpec(
 
 SEARCH_SPEC = ToolSpec(
     name="search_repo",
-    description="Search for a text pattern in files under the workspace (simple scan).",
+    description=(
+        "Search for text in the workspace. Matches exact substrings and also "
+        "ignores whitespace differences (e.g. query 'a-b' finds 'a - b'). "
+        "Use for snippets, operators, and keywords; prefer symbol_search for names."
+    ),
     parameters={
         "type": "object",
         "properties": {
@@ -84,20 +101,19 @@ GIT_DIFF_SPEC = ToolSpec(
 SEMANTIC_SPEC = ToolSpec(
     name="semantic_search",
     description=(
-        "Semantic / RAG search over the indexed workspace. "
-        "Prefer this to find code by meaning; use search_repo for exact text. "
-        "Requires `cozmo index` first."
+        "Hybrid retrieval over the indexed workspace: BM25+vector recall, "
+        "lexical rerank, then surrounding context. Prefer for meaning / fuzzy "
+        "snippets; use search_repo for exact text. Requires `cozmo index` first."
     ),
     parameters={
         "type": "object",
         "properties": {
             "query": {"type": "string"},
-            "top_k": {"type": "integer", "default": 5},
+            "top_k": {"type": "integer", "default": 10},
         },
         "required": ["query"],
     },
 )
-
 
 def build_default_registry(
     guard: WorkspaceGuard,
@@ -145,7 +161,7 @@ def build_default_registry(
             except OSError:
                 continue
             for i, line in enumerate(text.splitlines(), start=1):
-                if query in line:
+                if _line_matches(query, line):
                     rel = file.relative_to(guard.workdir)
                     hits.append(f"{rel}:{i}:{line.strip()[:200]}")
                     if len(hits) >= 40:
@@ -183,16 +199,25 @@ def build_default_registry(
                 "No RAG index loaded. Run: cozmo index -w <workdir> "
                 "then retry semantic_search."
             )
-        top_k = int(args.get("top_k") or 5)
-        q = embedder.embed(args["query"])
-        hits = vector_store.search(q, top_k=top_k)
+        top_k = int(args.get("top_k") or 10)
+        from cozmo.search.pipeline import RetrievalPipeline
+
+        pipeline = RetrievalPipeline(
+            vector_store,
+            embedder,
+            code_index=code_index,
+            sources=sources or {},
+            candidate_k=50,
+            top_k=top_k,
+        )
+        hits = pipeline.retrieve(args["query"], top_k=top_k)
         if not hits:
             return "No semantic hits."
         lines: list[str] = []
         for h in hits:
-            preview = h.chunk.text[:300].replace("\n", " ")
+            preview = h.text[:800].replace("\n", "\n")
             lines.append(
-                f"score={h.score:.3f} {h.chunk.path}:{h.chunk.start_line}\n{preview}"
+                f"score={h.score:.3f} {h.path}:{h.start_line}-{h.end_line}\n{preview}"
             )
         return "\n---\n".join(lines)
 
@@ -204,7 +229,6 @@ def build_default_registry(
     reg.register(GIT_STATUS_SPEC, git_status)
     reg.register(GIT_DIFF_SPEC, git_diff)
 
-    # Code intelligence tools (optional - requires a built CodeIndex)
     if code_index is not None:
         from cozmo.infra.tools.code_intel import register_code_intel_tools
 
@@ -217,7 +241,6 @@ def build_default_registry(
         )
 
     return reg
-
 
 def _git(cwd: Path, args: list[str]) -> str:
     proc = subprocess.run(

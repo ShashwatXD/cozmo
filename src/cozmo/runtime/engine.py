@@ -1,11 +1,4 @@
-"""
-Execution engine - runs planned steps via the tool registry.
-
-What: Sequentially executes StepPlans, retries on failure, collects results.
-Why: Decouples planning from execution; provides structured step results.
-Layer: runtime (orchestration, no vendor SDKs).
-How to test: Unit-test with a stub ToolRegistry/ToolExecutor and verify retries + ordering.
-"""
+"""Execution engine - runs planned steps via the tool registry."""
 
 from __future__ import annotations
 
@@ -21,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 2
 
-
 @dataclass
 class StepResult:
     """Outcome of a single execution step."""
@@ -30,7 +22,6 @@ class StepResult:
     status: str = "pending"  # pending | running | done | failed
     output: str = ""
     error: str | None = None
-
 
 class ExecutionEngine:
     """

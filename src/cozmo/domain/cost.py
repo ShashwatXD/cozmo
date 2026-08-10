@@ -1,24 +1,16 @@
-"""
-Cost estimation from token usage.
-
-What: map (model, Usage) → approximate USD.
-Why: every production gateway tracks spend; local/Ollama = $0.
-Layer: domain (pure math) - no network.
-"""
+"""Cost estimation from token usage."""
 
 from __future__ import annotations
 
 from cozmo.domain.completion import Usage
 
 # (input_per_1M_tokens, output_per_1M_tokens) USD - rough public list prices
-# Update when you care; interviews care that you *track*, not exact cents.
 _PRICE_PER_1M: dict[str, tuple[float, float]] = {
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o": (2.50, 10.00),
     "gpt-4.1-mini": (0.40, 1.60),
     "gpt-4.1": (2.00, 8.00),
 }
-
 
 def estimate_cost_usd(model: str, usage: Usage) -> float | None:
     """
@@ -33,7 +25,6 @@ def estimate_cost_usd(model: str, usage: Usage) -> float | None:
 
     rates = _PRICE_PER_1M.get(key)
     if rates is None:
-        # Unknown cloud model - still return 0 with honesty later via CLI note
         return 0.0
 
     in_rate, out_rate = rates
@@ -42,7 +33,6 @@ def estimate_cost_usd(model: str, usage: Usage) -> float | None:
     return (usage.prompt_tokens / 1_000_000) * in_rate + (
         usage.completion_tokens / 1_000_000
     ) * out_rate
-
 
 def format_cost_line(
     *,

@@ -13,7 +13,6 @@ from cozmo.infra.rag.store import VectorStore
 
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]+|[0-9]+")
 
-
 @dataclass(frozen=True)
 class HybridHit:
     """A result from hybrid search."""
@@ -25,10 +24,8 @@ class HybridHit:
     bm25_rank: int | None
     vector_rank: int | None
 
-
 def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in _TOKEN.findall(text)]
-
 
 class _BM25:
     """Minimal BM25 over a corpus of (key, text) pairs."""
@@ -71,14 +68,7 @@ class _BM25:
         results.sort(key=lambda x: x[1], reverse=True)
         return results
 
-
 class HybridSearch:
-    """Combines BM25 keyword scoring with vector similarity via RRF.
-
-    What: dual-retriever search with rank fusion.
-    Why: keyword recall + semantic recall in one API.
-    Layer: search.
-    """
 
     RRF_K = 60
 
@@ -89,11 +79,11 @@ class HybridSearch:
         self._embedder = embedder
         self._index = index
         self._bm25 = _BM25()
-        self._texts: dict[str, tuple[str, int, str]] = {}  # key -> (path, start_line, text)
+        self._texts: dict[str, tuple[str, int, str]] = {}
         self._built = False
 
     def build(self) -> None:
-        """Index all symbols into BM25. Call once after CodeIndex is ready."""
+        """Index symbols + vector-store chunks into BM25."""
         for path, fs in self._index.files.items():
             for sym in fs.symbols:
                 key = sym.qualified_name
@@ -104,6 +94,11 @@ class HybridSearch:
                     sym.location.start_line,
                     text,
                 )
+        for chunk, _emb in self._store.items():
+            if chunk.id in self._texts:
+                continue
+            self._bm25.add(chunk.id, chunk.text)
+            self._texts[chunk.id] = (chunk.path, chunk.start_line, chunk.text)
         self._bm25.build()
         self._built = True
 
@@ -111,20 +106,20 @@ class HybridSearch:
         if not self._built:
             self.build()
 
-        # BM25 retrieval
+        recall_n = max(top_k * 5, 50)
+
         bm25_results = self._bm25.score(query)
         bm25_ranks: dict[str, int] = {
-            key: rank + 1 for rank, (key, _) in enumerate(bm25_results)
+            key: rank + 1 for rank, (key, _) in enumerate(bm25_results[:recall_n])
         }
 
-        # Vector retrieval
+        # Vector retrieval — wide pool for later rerank
         q_emb = self._embedder.embed(query)
-        vec_hits = self._store.search(q_emb, top_k=top_k * 2)
+        vec_hits = self._store.search(q_emb, top_k=recall_n)
         vec_ranks: dict[str, int] = {
             h.chunk.id: rank + 1 for rank, h in enumerate(vec_hits)
         }
 
-        # RRF fusion
         all_keys = set(bm25_ranks) | set(vec_ranks)
         fused: list[tuple[str, float, int | None, int | None]] = []
         k = self.RRF_K

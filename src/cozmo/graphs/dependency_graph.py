@@ -7,17 +7,12 @@ from collections import defaultdict
 from cozmo.domain.index import CodeIndex
 from cozmo.domain.symbols import ImportInfo
 
-
 class DependencyGraph:
     """Directed graph of file-level dependencies derived from imports."""
 
     def __init__(self) -> None:
-        # file -> set of files it depends on
         self._deps: dict[str, set[str]] = defaultdict(set)
 
-    # ------------------------------------------------------------------
-    # Build
-    # ------------------------------------------------------------------
 
     def build(self, index: CodeIndex) -> None:
         """Populate the graph from a :class:`CodeIndex`."""
@@ -32,9 +27,6 @@ class DependencyGraph:
                 if resolved and resolved != path:
                     self._deps[path].add(resolved)
 
-    # ------------------------------------------------------------------
-    # Queries
-    # ------------------------------------------------------------------
 
     def dependencies(self, path: str) -> set[str]:
         """Files that *path* depends on (forward edges)."""
@@ -48,9 +40,6 @@ class DependencyGraph:
         """Serializable adjacency list."""
         return {k: sorted(v) for k, v in sorted(self._deps.items())}
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _module_map(index: CodeIndex) -> dict[str, str]:
@@ -75,7 +64,6 @@ class DependencyGraph:
         mod = imp.module
         if not mod:
             return None
-        # try exact match first
         if mod in module_map:
             return module_map[mod]
         # ``from cozmo.domain.tools import X`` – module is the path

@@ -1,13 +1,4 @@
-"""
-Embedders.
-
-What: HashingEmbedder (local, no network) for Core RAG demos + tests.
-Why: teach the RAG pipeline without pulling a second Ollama model.
-Layer: infra.
-
-Note: hashing is lexical overlap, not true semantics. Same pipeline
-swaps to a real model later (interview talking point).
-"""
+"""Embedders."""
 
 from __future__ import annotations
 
@@ -15,9 +6,7 @@ import hashlib
 import math
 import re
 
-
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]+|[0-9]+")
-
 
 class HashingEmbedder:
     """
@@ -39,7 +28,6 @@ class HashingEmbedder:
             idx = h % self.dim
             sign = 1.0 if (h // self.dim) % 2 == 0 else -1.0
             vec[idx] += sign
-        # L2 normalize
         norm = math.sqrt(sum(v * v for v in vec)) or 1.0
         return [v / norm for v in vec]
 

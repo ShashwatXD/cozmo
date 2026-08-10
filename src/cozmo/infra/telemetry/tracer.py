@@ -13,14 +13,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 @dataclass
 class TraceEvent:
     ts: float
     run_id: str
     kind: str
     data: dict[str, Any] = field(default_factory=dict)
-
 
 class Tracer:
     def __init__(self, path: Path | None = None, *, enabled: bool = True) -> None:

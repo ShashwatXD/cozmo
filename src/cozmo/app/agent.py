@@ -15,20 +15,17 @@ from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools.registry import ToolExecutor, ToolRegistry
 from cozmo.prompts.loader import load_system_prompt
 
-
 @dataclass(frozen=True)
 class AgentEvent:
     kind: str  # assistant | tool_call | tool_result | done
     text: str = ""
     tool_name: str = ""
 
-
 @dataclass(frozen=True)
 class AgentResult:
     final_text: str
     usage: Usage
     steps: int
-
 
 class AgentRunner:
     """

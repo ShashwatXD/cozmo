@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from cozmo.domain.messages import Message, Role
 
-
 class ConversationMemory:
     """
     Stores non-system messages; for_prompt() returns system + trimmed history.

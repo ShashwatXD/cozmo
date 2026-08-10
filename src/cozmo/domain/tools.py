@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -24,13 +23,11 @@ class ToolSpec:
             },
         }
 
-
 @dataclass(frozen=True)
 class ToolCall:
     id: str
     name: str
     arguments: str
-
 
 @dataclass(frozen=True)
 class ToolResult:

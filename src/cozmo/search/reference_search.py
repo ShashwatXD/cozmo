@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 from cozmo.domain.index import CodeIndex
 
-
 @dataclass(frozen=True)
 class Reference:
     """A single usage site of a symbol."""
@@ -17,14 +16,7 @@ class Reference:
     line_text: str
     context: str  # surrounding context or node description
 
-
 class ReferenceSearch:
-    """Find references to a symbol name across indexed source files.
-
-    What: cross-file usage finder using AST for Python, text for others.
-    Why: powers "find all references" without LSP.
-    Layer: search.
-    """
 
     def __init__(self, index: CodeIndex, sources: dict[str, str]) -> None:
         self._index = index

@@ -1,15 +1,8 @@
-"""
-Text chunking for RAG.
-
-What: split file text into overlapping chunks with line numbers.
-Why: embeddings work on passages, not whole repos.
-Layer: infra/rag (pure-ish helper).
-"""
+"""Text chunking for RAG."""
 
 from __future__ import annotations
 
 from cozmo.domain.rag import Chunk
-
 
 def chunk_text(
     path: str,

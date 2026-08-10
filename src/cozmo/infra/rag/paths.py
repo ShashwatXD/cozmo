@@ -8,10 +8,8 @@ from cozmo.infra.rag.store import VectorStore
 
 INDEX_NAME = "index.json"
 
-
 def index_path(workdir: Path) -> Path:
     return workdir.resolve() / ".cozmo" / INDEX_NAME
-
 
 def load_store(workdir: Path) -> VectorStore:
     return VectorStore.load(index_path(workdir))

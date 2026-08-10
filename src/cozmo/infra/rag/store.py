@@ -1,10 +1,4 @@
-"""
-In-memory / JSON vector store.
-
-What: store chunk + embedding; cosine top-k search; save/load.
-Why: tiny local "vector DB" for learning (Chroma/Pinecone later).
-Layer: infra.
-"""
+"""In-memory / JSON vector store."""
 
 from __future__ import annotations
 
@@ -15,7 +9,6 @@ from pathlib import Path
 
 from cozmo.domain.rag import Chunk, SearchHit
 
-
 def cosine(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
@@ -23,7 +16,6 @@ def cosine(a: list[float], b: list[float]) -> float:
     na = math.sqrt(sum(x * x for x in a)) or 1.0
     nb = math.sqrt(sum(y * y for y in b)) or 1.0
     return dot / (na * nb)
-
 
 class VectorStore:
     """In-memory chunk embeddings with cosine top-k search."""
@@ -39,6 +31,9 @@ class VectorStore:
 
     def add(self, chunk: Chunk, embedding: list[float]) -> None:
         self._items.append((chunk, embedding))
+
+    def items(self) -> list[tuple[Chunk, list[float]]]:
+        return list(self._items)
 
     def search(self, query_embedding: list[float], *, top_k: int = 5) -> list[SearchHit]:
         scored = [

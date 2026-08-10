@@ -8,22 +8,16 @@ from collections import defaultdict
 from cozmo.domain.index import CodeIndex
 from cozmo.domain.symbols import FileSymbols, SymbolKind
 
-
 class CallGraph:
     """Caller → callee relationships extracted from function bodies."""
 
     def __init__(self) -> None:
-        # qualified_name -> set of called qualified_names
         self._calls: dict[str, set[str]] = defaultdict(set)
 
-    # ------------------------------------------------------------------
-    # Build
-    # ------------------------------------------------------------------
 
     def build(self, index: CodeIndex, sources: dict[str, str]) -> None:
         """Parse every file's AST and record call edges."""
         self._calls.clear()
-        # Build a name-resolution table: simple name -> qualified name(s)
         name_table = self._build_name_table(index)
 
         for path, source in sources.items():
@@ -36,9 +30,6 @@ class CallGraph:
                 continue
             self._walk_tree(tree, file_syms, name_table)
 
-    # ------------------------------------------------------------------
-    # Queries
-    # ------------------------------------------------------------------
 
     def callees_of(self, name: str) -> set[str]:
         """Qualified names called by *name*."""
@@ -52,9 +43,6 @@ class CallGraph:
         """Serializable adjacency list."""
         return {k: sorted(v) for k, v in sorted(self._calls.items())}
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _build_name_table(index: CodeIndex) -> dict[str, str]:
@@ -80,7 +68,6 @@ class CallGraph:
         name_table: dict[str, str],
     ) -> None:
         """Walk AST and record call edges for every function/method."""
-        # Build a line-range -> qualified_name map for functions in this file
         func_ranges: list[tuple[range, str]] = []
         for sym in file_syms.symbols:
             if sym.kind in (SymbolKind.FUNCTION, SymbolKind.METHOD):
@@ -102,7 +89,6 @@ class CallGraph:
 
             resolved = name_table.get(callee_name, callee_name)
 
-            # find enclosing function
             lineno = getattr(node, "lineno", None)
             if lineno is None:
                 continue

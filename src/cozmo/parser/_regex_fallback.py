@@ -14,7 +14,6 @@ from cozmo.domain.symbols import (
     Visibility,
 )
 
-# ---- Pattern sets per language -----------------------------------------
 
 _JS_TS_PATTERNS: list[tuple[re.Pattern[str], SymbolKind]] = [
     (re.compile(r"^\s*(?:export\s+)?class\s+(\w+)"), SymbolKind.CLASS),
@@ -53,12 +52,10 @@ _LANG_MAP: dict[str, tuple[list[tuple[re.Pattern[str], SymbolKind]], re.Pattern[
     "go": (_GO_PATTERNS, None),
 }
 
-
 def _visibility(name: str) -> Visibility:
     if name.startswith("_"):
         return Visibility.PRIVATE
     return Visibility.PUBLIC
-
 
 def parse_with_regex(source: str, path: str, language: str) -> FileSymbols:
     """Extract symbols from *source* using regex heuristics."""

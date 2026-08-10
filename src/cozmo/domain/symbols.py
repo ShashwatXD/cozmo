@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-
 class SymbolKind(str, Enum):
     MODULE = "module"
     CLASS = "class"
@@ -14,18 +13,15 @@ class SymbolKind(str, Enum):
     VARIABLE = "variable"
     IMPORT = "import"
 
-
 class Visibility(str, Enum):
     PUBLIC = "public"
     PRIVATE = "private"
-
 
 @dataclass(frozen=True)
 class Location:
     path: str
     start_line: int
     end_line: int
-
 
 @dataclass(frozen=True)
 class SymbolNode:
@@ -38,10 +34,8 @@ class SymbolNode:
     docstring: str = ""
     visibility: Visibility = Visibility.PUBLIC
     children: tuple[SymbolNode, ...] = ()
-    # For imports
     module: str = ""
     alias: str = ""
-
 
 @dataclass(frozen=True)
 class ImportInfo:
@@ -53,7 +47,6 @@ class ImportInfo:
     is_relative: bool = False
     level: int = 0
     location: Location | None = None
-
 
 @dataclass(frozen=True)
 class FileSymbols:

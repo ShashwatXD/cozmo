@@ -21,7 +21,6 @@ from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolExecutor
 from cozmo.settings import Settings
 
-
 @dataclass(frozen=True)
 class EvalCase:
     id: str
@@ -31,13 +30,11 @@ class EvalCase:
     scripted_args: dict | None = None
     final_text: str = "eval ok"
 
-
 @dataclass(frozen=True)
 class EvalResult:
     case_id: str
     passed: bool
     detail: str
-
 
 DEFAULT_CASES: list[EvalCase] = [
     EvalCase(
@@ -57,7 +54,6 @@ DEFAULT_CASES: list[EvalCase] = [
         expect_substring="off-by-one",
     ),
 ]
-
 
 def run_eval(
     workdir: Path,

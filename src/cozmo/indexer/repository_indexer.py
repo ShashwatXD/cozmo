@@ -1,10 +1,4 @@
-"""
-Repository indexer - walks workspace, parses symbols, builds CodeIndex.
-
-What: Orchestrates file scanning, symbol extraction, and index persistence.
-Why: Single entry point for building a complete code index of a repository.
-Layer: indexer (app-level orchestration over domain + infra).
-"""
+"""Repository indexer - walks workspace, parses symbols, builds CodeIndex."""
 
 from __future__ import annotations
 
@@ -37,7 +31,6 @@ _LANGUAGE_MAP: dict[str, str] = {
     ".dart": "dart",
 }
 
-
 class RepositoryIndexer:
     """Walks a workspace and builds a CodeIndex of all symbols."""
 
@@ -52,7 +45,6 @@ class RepositoryIndexer:
 
         all_files = self._collect_files(root)
 
-        # Incremental: only process changed files
         hashes_path = root / ".cozmo" / "file_hashes.json"
         self._incremental.load(hashes_path)
         changed = self._incremental.changed_files(root, all_files)
@@ -89,7 +81,6 @@ class RepositoryIndexer:
         """Parse a file into FileSymbols. Only Python gets full AST parsing."""
         if language == "python":
             return self._parser.parse(text, path=rel_path)
-        # Non-Python: return a minimal FileSymbols (no symbol extraction yet)
         return FileSymbols(path=rel_path, language=language)
 
     def _save_index(self, root: Path, index: CodeIndex) -> None:

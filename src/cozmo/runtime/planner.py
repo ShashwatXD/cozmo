@@ -1,17 +1,9 @@
-"""
-Simple heuristic planner for code intelligence tasks.
-
-What: Maps a natural-language task to a sequence of StepPlans using keyword matching.
-Why: Gives the execution engine a structured plan without requiring an LLM call.
-Layer: runtime (orchestration helper, no vendor SDKs).
-How to test: Unit-test plan() with various task strings; assert correct tool suggestions.
-"""
+"""Simple heuristic planner for code intelligence tasks."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-
 
 @dataclass(frozen=True)
 class StepPlan:
@@ -23,10 +15,8 @@ class StepPlan:
     args: dict[str, object] = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)
 
-
 # Keyword patterns → (tool_name, action_description, arg_extractor)
 _PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
-    # symbol / definition lookup
     (
         re.compile(r"(?:find|where|locate|look\s?up).*(?:defin|declar|symbol)", re.I),
         "symbol_search",
@@ -37,7 +27,6 @@ _PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
         "symbol_search",
         "Search for symbol definition",
     ),
-    # references / callers
     (
         re.compile(r"(?:who|what|where).*(?:call|use|refer|import)", re.I),
         "find_references",
@@ -48,19 +37,16 @@ _PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
         "find_references",
         "Find references to symbol",
     ),
-    # graph / dependency queries
     (
         re.compile(r"(?:depend|import|call)\s*(?:graph|tree|chain)", re.I),
         "get_codebase_graph",
         "Retrieve codebase graph",
     ),
-    # semantic search fallback
     (
         re.compile(r"(?:search|find|look)\s+(?:for\s+)?(?:code|function|class)", re.I),
         "semantic_search",
         "Semantic search for code",
     ),
-    # file read
     (
         re.compile(r"(?:read|show|open|cat|view)\s+(?:file|content)", re.I),
         "read_file",
@@ -68,19 +54,15 @@ _PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
     ),
 ]
 
-
 def _extract_subject(task: str) -> str:
     """Try to pull the main subject (symbol / path) from the task string."""
-    # Look for quoted strings first
     m = re.search(r"['\"]([^'\"]+)['\"]", task)
     if m:
         return m.group(1)
-    # Look for backtick-wrapped identifiers
     m = re.search(r"`([^`]+)`", task)
     if m:
         return m.group(1)
     return ""
-
 
 class Planner:
     """Keyword-based planner that suggests code intelligence tools for a task."""
@@ -105,7 +87,6 @@ class Planner:
             elif tool_name == "find_references" and subject:
                 args["symbol_name"] = subject
             elif tool_name == "get_codebase_graph":
-                # infer graph type from task
                 if re.search(r"import", task, re.I):
                     args["graph_type"] = "import"
                 elif re.search(r"call", task, re.I):
@@ -126,7 +107,6 @@ class Planner:
             )
             seen_tools.add(tool_name)
 
-        # Fallback: if no pattern matched, suggest semantic_search if available
         if not steps and "semantic_search" in available_tools:
             steps.append(
                 StepPlan(

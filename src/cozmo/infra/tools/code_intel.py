@@ -1,11 +1,4 @@
-"""
-Code Intelligence tools - symbol search, references, codebase graphs.
-
-What: ToolSpec definitions + handlers for code-intelligence queries.
-Why: Gives the agent structured access to parsed symbol data and graphs.
-Layer: infra (wraps domain CodeIndex + search/graph modules).
-How to test: Unit-test handlers with a small in-memory CodeIndex fixture.
-"""
+"""Code Intelligence tools - symbol search, references, codebase graphs."""
 
 from __future__ import annotations
 
@@ -14,9 +7,6 @@ from typing import Any
 from cozmo.domain.tools import ToolSpec
 from cozmo.infra.tools.registry import ToolRegistry
 
-# ---------------------------------------------------------------------------
-# Tool specs
-# ---------------------------------------------------------------------------
 
 SYMBOL_SEARCH_SPEC = ToolSpec(
     name="symbol_search",
@@ -78,11 +68,6 @@ GET_CODEBASE_GRAPH_SPEC = ToolSpec(
 )
 
 
-# ---------------------------------------------------------------------------
-# Handlers
-# ---------------------------------------------------------------------------
-
-
 def _make_symbol_search_handler(
     code_index: Any,
     sources: dict[str, str],
@@ -93,14 +78,12 @@ def _make_symbol_search_handler(
         query = args["query"]
         kind = args.get("kind")
 
-        # Use SymbolSearch if available, otherwise fall back to CodeIndex
         try:
             from cozmo.search.symbol_search import SymbolSearch
 
             searcher = SymbolSearch(code_index)
             results = searcher.search(query, kind=kind)
         except ImportError:
-            # Fallback: linear scan over index
             results = _fallback_symbol_search(code_index, query, kind)
 
         if not results:
@@ -114,7 +97,6 @@ def _make_symbol_search_handler(
 
     return symbol_search
 
-
 def _fallback_symbol_search(code_index: Any, query: str, kind: str | None) -> list[Any]:
     """Simple fallback when search module isn't available yet."""
     matches = []
@@ -124,7 +106,6 @@ def _fallback_symbol_search(code_index: Any, query: str, kind: str | None) -> li
                 if kind is None or (hasattr(sym.kind, "value") and sym.kind.value == kind):
                     matches.append(sym)
     return matches
-
 
 def _make_find_references_handler(
     code_index: Any,
@@ -141,7 +122,6 @@ def _make_find_references_handler(
             searcher = ReferenceSearch(code_index, sources)
             refs = searcher.find(symbol_name)
         except ImportError:
-            # Fallback: grep-style scan over sources
             refs = _fallback_reference_search(sources, symbol_name)
 
         if not refs:
@@ -158,7 +138,6 @@ def _make_find_references_handler(
 
     return find_references
 
-
 def _fallback_reference_search(sources: dict[str, str], symbol_name: str) -> list[dict[str, Any]]:
     """Simple text-based reference search when search module isn't available."""
     refs: list[dict[str, Any]] = []
@@ -169,7 +148,6 @@ def _fallback_reference_search(sources: dict[str, str], symbol_name: str) -> lis
                 if len(refs) >= 30:
                     return refs
     return refs
-
 
 def _make_get_codebase_graph_handler(
     code_index: Any,
@@ -211,7 +189,6 @@ def _make_get_codebase_graph_handler(
 
     return get_codebase_graph
 
-
 def _fallback_graph(code_index: Any, graph_type: str, scope_path: str | None) -> str:
     """Minimal graph info from the code index when graph modules aren't available."""
     if graph_type == "import":
@@ -224,11 +201,6 @@ def _fallback_graph(code_index: Any, graph_type: str, scope_path: str | None) ->
                 lines.append(f"  {path} -> {', '.join(imports[:10])}")
         return "\n".join(lines) if len(lines) > 1 else "No import data available."
     return f"{graph_type} graph: {len(code_index.files)} files indexed. Install graph modules for full support."
-
-
-# ---------------------------------------------------------------------------
-# Registration
-# ---------------------------------------------------------------------------
 
 
 def register_code_intel_tools(

@@ -14,10 +14,8 @@ from cozmo.domain.symbols import (
     Visibility,
 )
 
-
 def _visibility(name: str) -> Visibility:
     return Visibility.PRIVATE if name.startswith("_") else Visibility.PUBLIC
-
 
 def _get_docstring(node: ast.AST) -> str:
     """Extract docstring from a class/function/module node."""
@@ -25,10 +23,8 @@ def _get_docstring(node: ast.AST) -> str:
         return ast.get_docstring(node) or ""
     return ""
 
-
 def _end_line(node: ast.AST) -> int:
     return getattr(node, "end_lineno", None) or getattr(node, "lineno", 0)
-
 
 class PythonASTParser:
     """Parses Python source into SymbolNode and ImportInfo objects."""
@@ -44,9 +40,6 @@ class PythonASTParser:
             language="python",
         )
 
-    # ------------------------------------------------------------------
-    # Symbol extraction
-    # ------------------------------------------------------------------
 
     def _visit_body(
         self,
@@ -126,9 +119,6 @@ class PythonASTParser:
             for n in names
         ]
 
-    # ------------------------------------------------------------------
-    # Import extraction
-    # ------------------------------------------------------------------
 
     def _collect_imports(
         self,

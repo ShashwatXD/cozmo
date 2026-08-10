@@ -1,17 +1,10 @@
-"""
-Incremental indexer - SHA-256 change detection for files.
-
-What: Tracks file content hashes to detect changed/new files.
-Why: Avoids re-parsing and re-embedding unchanged files.
-Layer: indexer (infrastructure-adjacent utility).
-"""
+"""Incremental indexer - SHA-256 change detection for files."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
-
 
 class IncrementalIndexer:
     """Detects changed files by comparing SHA-256 content hashes."""

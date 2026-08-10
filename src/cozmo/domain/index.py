@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 
 from cozmo.domain.symbols import FileSymbols, SymbolNode
 
-
 @dataclass
 class CodeIndex:
     """Complete code index for a repository."""

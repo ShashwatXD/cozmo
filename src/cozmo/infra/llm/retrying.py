@@ -1,10 +1,4 @@
-"""
-Retry wrapper around any LLMClient.
-
-What: retries transient failures (timeout, connection, rate limit).
-Why: production gateways don't fail the user on one blip.
-Layer: infra decorator.
-"""
+"""Retry wrapper around any LLMClient."""
 
 from __future__ import annotations
 
@@ -30,7 +24,6 @@ _RETRYABLE = (
     TimeoutError,
     ConnectionError,
 )
-
 
 class RetryingLLMClient:
     """Decorator that retries transient failures on an inner LLMClient."""

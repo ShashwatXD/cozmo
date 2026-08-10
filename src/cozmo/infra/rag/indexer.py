@@ -1,10 +1,4 @@
-"""
-Repository indexer - walk files → chunk → embed → store.
-
-What: Indexer service used by `cozmo index`.
-Why: one place builds the RAG index the agent searches.
-Layer: app/infra boundary (app use-case style).
-"""
+"""Repository indexer - walk files → chunk → embed → store."""
 
 from __future__ import annotations
 
@@ -29,7 +23,6 @@ _TEXT_SUFFIXES = {
     ".rs",
     ".go",
 }
-
 
 class RepoIndexer:
     def __init__(self, embedder: Embedder, store: VectorStore) -> None:

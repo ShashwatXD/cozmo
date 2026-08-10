@@ -1,15 +1,8 @@
-"""
-Completion results shared across providers.
-
-What: CompletionResult + token Usage (+ optional tool_calls).
-Why: one return shape for stub/openai/ollama (DRY).
-Layer: domain.
-"""
+"""Completion results shared across providers."""
 
 from dataclasses import dataclass, field
 
 from cozmo.domain.tools import ToolCall
-
 
 @dataclass(frozen=True)
 class Usage:
@@ -28,14 +21,12 @@ class Usage:
             completion_tokens=self.completion_tokens + other.completion_tokens,
         )
 
-
 @dataclass(frozen=True)
 class CompletionResult:
     """Full non-stream reply (text and/or tool calls)."""
 
     content: str = ""
     usage: Usage = field(default_factory=Usage)
-    # stop | length | tool_calls | ...
     finish_reason: str | None = None
     tool_calls: tuple[ToolCall, ...] = field(default_factory=tuple)
 

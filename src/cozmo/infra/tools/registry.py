@@ -1,10 +1,4 @@
-"""
-Tool registry + executor.
-
-What: name → tool handler; validate JSON args; run; return ToolResult.
-Why: agent loop never hardcodes tools (open/closed principle).
-Layer: infra (+ used by app).
-"""
+"""Tool registry + executor."""
 
 from __future__ import annotations
 
@@ -15,12 +9,10 @@ from typing import Any
 
 from cozmo.domain.tools import ToolCall, ToolResult, ToolSpec
 
-
 @dataclass
 class RegisteredTool:
     spec: ToolSpec
     handler: Callable[[dict[str, Any]], str]
-
 
 class ToolRegistry:
     def __init__(self) -> None:
@@ -34,7 +26,6 @@ class ToolRegistry:
 
     def get(self, name: str) -> RegisteredTool | None:
         return self._tools.get(name)
-
 
 class ToolExecutor:
     """Runs ToolCalls; errors become ToolResult(is_error=True) for the model."""

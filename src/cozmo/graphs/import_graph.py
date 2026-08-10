@@ -6,7 +6,6 @@ from collections import defaultdict
 
 from cozmo.domain.index import CodeIndex
 
-
 class ImportGraph:
     """Per-file classification of imports as internal or external."""
 
@@ -14,9 +13,6 @@ class ImportGraph:
         self._internal: dict[str, set[str]] = defaultdict(set)
         self._external: dict[str, set[str]] = defaultdict(set)
 
-    # ------------------------------------------------------------------
-    # Build
-    # ------------------------------------------------------------------
 
     def build(self, index: CodeIndex) -> None:
         """Classify every import in the index."""
@@ -38,9 +34,6 @@ class ImportGraph:
                 else:
                     self._external[path].add(top)
 
-    # ------------------------------------------------------------------
-    # Queries
-    # ------------------------------------------------------------------
 
     def internal_imports(self, path: str) -> set[str]:
         """Internal (project) modules imported by *path*."""
@@ -64,9 +57,6 @@ class ImportGraph:
             "external": {k: sorted(v) for k, v in sorted(self._external.items())},
         }
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _known_roots(index: CodeIndex) -> set[str]:

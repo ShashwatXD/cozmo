@@ -8,7 +8,6 @@ from cozmo.domain.messages import Message, Role
 from cozmo.domain.ports import LLMClient
 from cozmo.prompts.loader import load_system_prompt
 
-
 class ChatUseCase:
     def __init__(
         self,

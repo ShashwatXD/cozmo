@@ -1,49 +1,83 @@
-"""
-Typed app config loaded once at startup.
+"""Typed Settings from config files, env, and CLI."""
 
-Single Settings object (provider, model, workdir, keys, sampling).
-No scattered os.getenv in business code.
-"""
+from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Type
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, Field
+from pydantic.fields import FieldInfo
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_ENV_FILE = _REPO_ROOT / ".env"
+from cozmo.infra.config.store import load_merged_file_config
 
+class _FileJsonSettingsSource(PydanticBaseSettingsSource):
+
+    def get_field_value(
+        self, field: FieldInfo, field_name: str
+    ) -> tuple[Any, str, bool]:
+        data = load_merged_file_config(Path.cwd())
+        if field_name in data:
+            return data[field_name], field_name, True
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        return load_merged_file_config(Path.cwd())
 
 class Settings(BaseSettings):
-    """Application configuration from env / .env (prefix COZMO_)."""
-
     model_config = SettingsConfigDict(
-        env_file=str(_ENV_FILE) if _ENV_FILE.exists() else ".env",
+        env_file=".env",
         env_file_encoding="utf-8",
         env_prefix="COZMO_",
         extra="ignore",
+        populate_by_name=True,
     )
 
-    # stub | openai | ollama
     provider: str = "stub"
     model: str = "stub-model"
     workdir: Path = Field(default=Path("."))
-    openai_api_key: str | None = None
-    openai_base_url: str | None = None
+    api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("api_key", "openai_api_key"),
+    )
+    base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("base_url", "openai_base_url"),
+    )
     temperature: float = 0.2
     timeout_s: float = 120.0
     max_retries: int = 3
+    # Cap completion size so low-credit OpenRouter accounts aren't rejected (402).
+    max_tokens: int = 2048
     allow_write: bool = True
     allow_shell: bool = False
     max_agent_steps: int = 8
     memory_max_messages: int = 40
-    # hash | openai | ollama
-    embedder: str = "hash"
+    embedder: str = "auto"
     embedding_model: str = "text-embedding-3-small"
-    # observability
     trace_enabled: bool = True
     log_level: str = "INFO"
 
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            _FileJsonSettingsSource(settings_cls),
+            file_secret_settings,
+        )
 
 def load_settings() -> Settings:
     return Settings()

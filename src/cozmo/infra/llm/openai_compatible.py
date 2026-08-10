@@ -1,10 +1,4 @@
-"""
-OpenAI-compatible chat adapter (tools + stream).
-
-What: talks to OpenAI OR Ollama via the `openai` SDK.
-Why: one adapter, two providers - base_url switches the backend.
-Layer: infra.
-"""
+"""OpenAI-compatible chat adapter."""
 
 from __future__ import annotations
 
@@ -16,7 +10,6 @@ from openai import OpenAI
 from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.tools import ToolCall, ToolSpec
-
 
 def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
@@ -52,10 +45,7 @@ def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
             out.append({"role": m.role.value, "content": m.content})
     return out
 
-
 class OpenAICompatibleClient:
-    """LLMClient via OpenAI-compatible HTTP API."""
-
     def __init__(
         self,
         *,
@@ -63,8 +53,10 @@ class OpenAICompatibleClient:
         api_key: str,
         base_url: str | None = None,
         timeout_s: float = 60.0,
+        max_tokens: int = 2048,
     ) -> None:
         self._model = model
+        self._max_tokens = max_tokens
         self._client = OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -83,6 +75,7 @@ class OpenAICompatibleClient:
             "model": self._model,
             "messages": _to_api_messages(messages),
             "temperature": temperature,
+            "max_tokens": self._max_tokens,
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
@@ -127,6 +120,7 @@ class OpenAICompatibleClient:
             "model": self._model,
             "messages": _to_api_messages(messages),
             "temperature": temperature,
+            "max_tokens": self._max_tokens,
             "stream": True,
         }
         try:

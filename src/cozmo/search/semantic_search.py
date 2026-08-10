@@ -1,4 +1,4 @@
-"""Semantic search – thin wrapper around VectorStore for convenience."""
+"""Semantic search over a VectorStore."""
 
 from __future__ import annotations
 
@@ -6,14 +6,7 @@ from cozmo.domain.ports_rag import Embedder
 from cozmo.domain.rag import SearchHit
 from cozmo.infra.rag.store import VectorStore
 
-
 class SemanticSearch:
-    """Embed a query and search the vector store.
-
-    What: convenience API over VectorStore + Embedder.
-    Why: single call instead of embed-then-search.
-    Layer: search.
-    """
 
     def __init__(self, store: VectorStore, embedder: Embedder) -> None:
         self._store = store

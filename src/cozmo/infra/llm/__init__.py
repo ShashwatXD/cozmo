@@ -1,1 +1,1 @@
-"""LLM provider adapters (OpenAI / Ollama later)."""
+"""LLM provider adapters."""

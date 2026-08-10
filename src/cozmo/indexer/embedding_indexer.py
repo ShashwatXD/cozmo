@@ -1,10 +1,4 @@
-"""
-Embedding indexer - embeds symbol definitions into vector store.
-
-What: Extracts dense passages from FileSymbols, embeds via Embedder port, stores in VectorStore.
-Why: Enables semantic search over code symbols and function bodies.
-Layer: indexer (bridges domain symbols → infra vector store).
-"""
+"""Embedding indexer - embeds symbol definitions into vector store."""
 
 from __future__ import annotations
 
@@ -13,14 +7,12 @@ from cozmo.domain.rag import Chunk
 from cozmo.domain.symbols import FileSymbols, SymbolKind, SymbolNode
 from cozmo.infra.rag.store import VectorStore
 
-
 def _extract_body(text: str, node: SymbolNode) -> str:
     """Extract the source text for a symbol using its location."""
     lines = text.splitlines()
     start = max(0, node.location.start_line - 1)
     end = min(len(lines), node.location.end_line)
     return "\n".join(lines[start:end])
-
 
 def _symbol_passage(node: SymbolNode, body: str) -> str:
     """Build a dense passage combining symbol metadata and body."""
@@ -29,7 +21,6 @@ def _symbol_passage(node: SymbolNode, body: str) -> str:
         parts.append(node.docstring)
     parts.append(body)
     return "\n".join(parts)
-
 
 class EmbeddingIndexer:
     """Embeds symbol definitions and stores them in VectorStore."""
