@@ -18,3 +18,8 @@ htmlcov/
 .idea/
 
 *.swp
+
+# Website
+node_modules/
+website/dist/
+website/node_modules/

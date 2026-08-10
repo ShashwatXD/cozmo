@@ -1,102 +1,144 @@
+```
+               :@@@@@@@@@@@@@@@@@@@==-
+             @@.                     @@@@%-==
+          @@@=                            @@@
+        :@@.                                 @@@@@
+       @@@+   =+   @@@@@@@@@@@@@@@@+-=+-: .      @
+     *@@@ =@@@@@@%@%#%%##******##%@@@@@%@@@%*-:   @@:+=
+     @@ -@@@@@@@@@@@@@@@@@@@@@@%####%##@%#+=       @@.++
+    @ +@@                *@@@@@@@@@#*++- ::.=*%#%%  @@-=-
+   =@-                         +@@@@%%*:   -+*@%%@* .@:-+
+   %     @@@@@@@@@ @  @@@          @@@@@*@ +#@%@@@@  @@-+
+   @ @-@@@@@@@@@@@@@@@@@@@@@@@  @    @@@@#*%+#*%@#*+  @.+=
+  =  @@%+@@@@@@@@@@@@@@@@@@@@@@@@@    @@#%=*+%@@+@@@@=@.-+=
+  @  @##@@@@@@@@@@@@@@@@@@@@@@@@@@@  . @%#+%#@@+ @#+:@@=-=.
+ .#  @#+@@@@@@@@@@@@@@@@@@@@@@@@@@@@ - @%####@@ :@*:@@ =#@%
+ @@  @%*@@@        @@@@@@@@@@@@@@@@@ -=@@#%#%@  @@ +@@+%   :
+ @%  @@=@@@         @@@@@@@@@@@@@@@@ .=@@%%*@@ @@%:%-.@  %%%
+*@@  @@=@@@         @@        =@@@@@: +@@###@@ @@%@@@%@  @*
+ %@  @@=@@@         @@         @@@@@- =@@%##@* @% @*%@@ .@%
+  -  @@=@@@         @@         @@@@@- +@@%##@@ @@%@*%%@  @@
+     @@+@@@@       @@@         @@@@@: +@@%##@@ @@#@@%@@@
+     @@+@@#%%#@@@@@@@@@@@@@@@@@@@@@@  +@@%%#%@*.@@-%@@@@@%
+     @@#@@@@@@@#%@@%%%%%@%@@@@@@@@@@  +@@%%%%#@.=@@#@@# .
+     @@@@@%%%%@%@%%@@%%%@%%@@@@@%%@@ -=@%%#%@+%%  +=+-
+      @@@@@@%@@%@@@@@@@@@@@@%@%%@@@@ =.@@@%%@*#%@%@%+
+          @@@@@@@@@@@@@@@@@@@@@@@@@ .  @%%@@@*#%##
+       =@      @@@@@@@@@@@@@@@@@@    @@@@@@%*=-
+         @@#-           -====      +@@@%@@+-+#%%#%
+          @@@@@@%*+:            -#@@@@@@@@%@#   %%
+          -=#@@@@@@@@@@@@@@@@@@@@@@@@@@@-.   @@@@@
+          %#     @@*  #%@@@@@@@@@@@   @  @@@@@@@@@
+
+  ██████╗ ██████╗ ███████╗███╗   ███╗ ██████╗
+ ██╔════╝██╔═══██╗╚══███╔╝████╗ ████║██╔═══██╗
+ ██║     ██║   ██║  ███╔╝ ██╔████╔██║██║   ██║
+ ██║     ██║   ██║ ███╔╝  ██║╚██╔╝██║██║   ██║
+ ╚██████╗╚██████╔╝███████╗██║ ╚═╝ ██║╚██████╔╝
+  ╚═════╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝ ╚═════╝
+```
+
 # Cozmo
 
-Production-style **CLI coding agent** in Python: provider-swappable LLM gateway, ReAct tool loop, sandboxed tools, conversation memory, RAG, retries/cost tracking, JSONL traces, and a golden eval suite.
-
-Inspired by systems like Cursor - focused on the **agent runtime**, not an IDE UI.
-
-## Features
-
-| Area | What shipped |
-|------|----------------|
-| **LLM gateway** | Unified `LLMClient` port - **OpenAI / Ollama / stub** via config or `--provider` |
-| **Tool calling** | JSON schemas, registry, executor, error feedback to the model |
-| **ReAct agent** | Plan/act/observe loop with max-steps guard |
-| **Sandbox** | Workspace path allowlist; write/shell gated by flags |
-| **Tools** | `read_file`, `write_file`, `search_repo`, `semantic_search`, `git_status`, `git_diff`, `run_shell` |
-| **Memory** | Sliding-window conversation memory (multi-turn REPL) |
-| **RAG** | Chunk → embed → cosine retrieval; embedders: **hash / OpenAI / Ollama** |
-| **Reliability** | Timeouts, exponential backoff retries (`tenacity`) |
-| **Cost** | Token usage + estimated USD by model |
-| **Observability** | JSONL traces (LLM latency/tokens, tool calls) under `.cozmo/traces.jsonl` |
-| **Evaluation** | `cozmo eval` golden tasks (stub CI-safe; `--live` optional) |
-| **Architecture** | Clean layers: `cli` → `app` → `domain` ← `infra` (ports & adapters) |
-
-## Quick start
+CLI coding agent for your repo. One command. Provider setup. Then it indexes and works.
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-cp .env.example .env
-# edit .env - ollama or openai
-
-# optional: local model
-ollama serve
-# ollama pull qwen2.5:3b
-
-cozmo index -w tests/fixtures/tiny_repo
-cozmo agent -w tests/fixtures/tiny_repo -m "Find the bug in math_utils.py"
-cozmo eval -w tests/fixtures/tiny_repo
-pytest -q
+pip install cozmo-agent
+cd ~/your-project
+cozmo
 ```
 
-### Provider switch
+Requires Python 3.11+.
+
+---
+
+## What happens
+
+1. **Install** `cozmo-agent` (CLI binary is still `cozmo`)
+2. Run `cozmo` in any project
+3. First run: pick provider → paste key → pick model
+4. Cozmo writes config, indexes the repo, opens an interactive session
+
+Type questions at the prompt. Exit with `Ctrl+C` or an empty quit.
 
 ```bash
-# .env
-COZMO_PROVIDER=openai
-COZMO_MODEL=gpt-4o-mini
-COZMO_OPENAI_API_KEY=sk-...
-
-# or CLI override (no .env edit)
-cozmo agent -p openai --model gpt-4o-mini -w . -m "Explain src/cozmo/app/agent.py"
-cozmo chat -p ollama --model qwen2.5:3b -m "Hello"
+cozmo                # interactive agent (normal use)
+cozmo setup          # change provider / model / key
 ```
 
-### RAG with real embeddings
+---
+
+## Config (where files land)
+
+| Path | What |
+|------|------|
+| `~/.cozmo/config.json` | Global settings + API key (created on first run) |
+| `$XDG_CONFIG_HOME/cozmo/config.json` | Same, if `XDG_CONFIG_HOME` is set |
+| `<repo>/.cozmo/` | Index, traces, code graph |
+| `<repo>/.cozmo/config.json` | Optional project overrides |
 
 ```bash
-# OpenAI embeddings
-COZMO_EMBEDDER=openai COZMO_EMBEDDING_MODEL=text-embedding-3-small cozmo index -w .
-
-# or Ollama: ollama pull nomic-embed-text
-COZMO_EMBEDDER=ollama COZMO_EMBEDDING_MODEL=nomic-embed-text cozmo index -w .
+cozmo config         # print exact paths
+cozmo config --show  # print JSON (key masked)
+cozmo doctor         # effective settings
 ```
 
-## Architecture
+<details>
+<summary>Example <code>~/.cozmo/config.json</code></summary>
 
-```
-CLI (typer)
-  → ChatUseCase / AgentRunner          # application / orchestration
-      → LLMClient (Protocol)           # port
-          → OpenAICompatible / Stub    # adapters (+ RetryingLLMClient)
-      → ToolRegistry / ToolExecutor
-      → ConversationMemory
-      → VectorStore + Embedder         # RAG
-      → Tracer                         # JSONL observability
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "api_key": "sk-...",
+  "allow_write": true,
+  "allow_shell": false,
+  "max_agent_steps": 8
+}
 ```
 
-Dependency rule: **domain never imports openai**. Infra implements ports.
+Load order: CLI flags → `COZMO_*` env → cwd `.env` → project config → global config → defaults
+
+</details>
+
+---
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `cozmo chat` | Streaming chat (+ REPL) |
-| `cozmo agent` | Coding agent with tools |
-| `cozmo index` | Build `.cozmo/index.json` |
-| `cozmo eval` | Golden regression suite |
-| `cozmo --version` | Version |
+| | |
+|--|--|
+| `cozmo` | Interactive agent (default) |
+| `cozmo setup` | Interactive reconfigure |
+| `cozmo config` | Config paths |
+| `cozmo index` | Force re-index |
+| `cozmo chat` | LLM only, no tools |
+| `cozmo doctor` | Diagnose settings |
+| `cozmo -m "…"` | Optional one-shot (no REPL) |
 
-## Project layout
+---
+
+## Stack (short)
+
+- Owned ReAct loop (no LangChain)
+- Tools: read/write, search, semantic search, git, symbols, graphs (shell gated)
+- Hybrid RAG: BM25 + embeddings
+- Providers: OpenAI, OpenRouter, Ollama, any OpenAI-compatible API
 
 ```
-src/cozmo/
-  domain/     # messages, tools, ports, memory, cost, rag types
-  app/        # ChatUseCase, AgentRunner, eval_runner
-  infra/      # LLM adapters, tools, RAG, telemetry
-  cli/        # Typer entrypoint
-  prompts/    # versioned system prompts
-tests/
-docs/
+cozmo → config → index → AgentRunner
+              LLM ↔ tools ↔ your files
 ```
 
+---
+
+## Dev
+
+```bash
+git clone https://github.com/ShashwatXD/cozmo.git
+cd cozmo
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest -q
+```
+
+MIT
