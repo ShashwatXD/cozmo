@@ -1,7 +1,7 @@
 import "./styles.css";
 import { MASCOT } from "./mascot";
 
-const PIP = "pip install cozmo-agent";
+const PIP = "pipx install cozmo-agent";
 const VERSION = "0.2.0";
 const GITHUB = "https://github.com/ShashwatXD/cozmo";
 
@@ -145,7 +145,7 @@ function build(root: HTMLElement): Refs {
     ),
   );
   const runPre = el("pre");
-  runPre.textContent = ["pip install cozmo-agent", "cozmo"].join("\n");
+  runPre.textContent = ["pipx install cozmo-agent", "cozmo"].join("\n");
   inner.append(runPre);
 
   doc.append(inner);
