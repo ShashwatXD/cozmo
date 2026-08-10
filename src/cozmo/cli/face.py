@@ -1,4 +1,8 @@
-"""Cozmo splash — animated wordmark only (Hermes-style)."""
+"""Cozmo splash — ASCII mascot + cyan wordmark.
+
+Mascot art lives in mascot_ascii.py (outline density art of the
+headphones / cube-head / skateboard mascot).
+"""
 
 from __future__ import annotations
 
@@ -7,8 +11,10 @@ import time
 
 from cozmo import __version__
 from cozmo.cli import theme
+from cozmo.cli.mascot_ascii import MASCOT_ASCII
 
-# Block logo rows (painted with a cyan gradient during animation).
+_BOT_H = len(MASCOT_ASCII)
+
 _LOGO_ROWS: tuple[str, ...] = (
     r"  ██████╗ ██████╗ ███████╗███╗   ███╗ ██████╗ ",
     r" ██╔════╝██╔═══██╗╚══███╔╝████╗ ████║██╔═══██╗",
@@ -29,7 +35,71 @@ _ROW_STYLES: tuple[str, ...] = (
 
 
 def render_face_plain() -> str:
-    return "\n".join(_LOGO_ROWS)
+    return "\n".join((*MASCOT_ASCII, "", *_LOGO_ROWS))
+
+
+def _cursor_up(n: int) -> None:
+    sys.stdout.write(f"\033[{n}A")
+    sys.stdout.flush()
+
+
+def _char_style(ch: str) -> str:
+    """Density → brand color (open eyes stay dark, face cyan, cans purple)."""
+    if ch in " .":
+        return theme.MUTED
+    if ch in ":":
+        return theme.MUTED
+    if ch in "-=":
+        return theme.SHELL_DIM
+    if ch in "+":
+        return theme.SHELL_DIM
+    if ch in "*":
+        return theme.HEADPHONE
+    if ch in "#":
+        return theme.CYAN
+    if ch == "%":
+        return theme.CYAN
+    if ch == "@":
+        return theme.CYAN_BOLD
+    return theme.CYAN
+
+
+def _paint_mascot(console) -> None:
+    from rich.text import Text
+
+    for row in MASCOT_ASCII:
+        text = Text()
+        for ch in row:
+            text.append(ch, style=_char_style(ch))
+        console.print(text)
+
+
+def _animate_mascot(console) -> None:
+    """Reveal top → bottom, then a quick cyan pulse redraw."""
+    from rich.text import Text
+
+    for i, row in enumerate(MASCOT_ASCII):
+        text = Text()
+        for ch in row:
+            text.append(ch, style=_char_style(ch))
+        console.print(text)
+        if i < 8 or i % 3 == 0:
+            time.sleep(0.008)
+
+    time.sleep(0.12)
+    # pulse: redraw all bold cyan, then settle
+    _cursor_up(_BOT_H)
+    for row in MASCOT_ASCII:
+        text = Text()
+        for ch in row:
+            if ch in ". ":
+                text.append(ch, style=theme.MUTED)
+            else:
+                text.append(ch, style=theme.CYAN_BOLD)
+        console.print(text)
+    time.sleep(0.10)
+    _cursor_up(_BOT_H)
+    _paint_mascot(console)
 
 
 def _paint_logo(console) -> None:
@@ -40,29 +110,18 @@ def _paint_logo(console) -> None:
 
 
 def _animate_logo(console) -> None:
-    """Reveal the wordmark row-by-row, then a quick cyan pulse."""
     from rich.text import Text
 
-    # Row reveal
-    for i, (style, row) in enumerate(zip(_ROW_STYLES, _LOGO_ROWS, strict=True)):
+    for style, row in zip(_ROW_STYLES, _LOGO_ROWS, strict=True):
         console.print(Text(row, style=style))
-        if console.is_terminal:
-            time.sleep(0.045)
-
-    if not console.is_terminal:
-        return
-
-    # Pulse: flash bold → settle back to gradient
-    time.sleep(0.08)
-    # Move cursor up over logo and redraw brighter, then final gradient
+        time.sleep(0.04)
+    time.sleep(0.06)
     n = len(_LOGO_ROWS)
-    sys.stdout.write(f"\033[{n}A")
-    sys.stdout.flush()
+    _cursor_up(n)
     for row in _LOGO_ROWS:
         console.print(Text(row, style=theme.CYAN_BOLD))
-    time.sleep(0.12)
-    sys.stdout.write(f"\033[{n}A")
-    sys.stdout.flush()
+    time.sleep(0.10)
+    _cursor_up(n)
     _paint_logo(console)
 
 
@@ -77,8 +136,12 @@ def print_face(*, clear: bool = True, animate: bool = True) -> None:
 
         console.print()
         if animate and console.is_terminal:
+            _animate_mascot(console)
+            console.print()
             _animate_logo(console)
         else:
+            _paint_mascot(console)
+            console.print()
             _paint_logo(console)
 
         console.print()

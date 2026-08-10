@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from cozmo.cli import theme
 
+# Square OLED eyes — same mascot language as cli/face.py
 _EYE_FRAMES: tuple[str, ...] = (
-    "◉  ◉",
-    "◎  ◉",
-    "◉  ◎",
-    "◡  ◡",
+    "■  ■",
+    "■ ■ ",
+    " ■  ■",
+    "■  ■",
+    "─  ─",
 )
 
 _LOGO_FRAMES: tuple[str, ...] = (

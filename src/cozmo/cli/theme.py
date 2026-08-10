@@ -13,8 +13,13 @@ CYAN = "cyan"
 CYAN_BOLD = "bold cyan"
 CYAN_DIM = "dim cyan"
 
-# White shell / bezel around the black faceplate
+# Headphones / accent purple (mascot reference)
+HEADPHONE = "bold #6b5ce0"
+HEADPHONE_DIM = "#6b5ce0"
+
+# Body shell (charcoal bezel)
 SHELL = "bright_white"
+SHELL_DIM = "dim white"
 
 # Dim chrome for secondary status
 MUTED = "dim"
