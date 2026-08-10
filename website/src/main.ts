@@ -1,7 +1,7 @@
 import "./styles.css";
 import { MASCOT } from "./mascot";
 
-const PIP = "pip install cozmo";
+const PIP = "pip install cozmo-agent";
 const VERSION = "0.2.0";
 const GITHUB = "https://github.com/ShashwatXD/cozmo";
 
@@ -94,7 +94,7 @@ function build(root: HTMLElement): Refs {
   const ul = el("ul");
   for (const item of [
     "Semantic retrieval over embedded chunks (RAG)",
-    "Hybrid search — meaning plus exact lexical match",
+    "Hybrid search: meaning plus exact lexical match",
     "Symbol and reference graphs so the model can follow definitions and callers",
     "Context assembled for the task, not a dump of the whole tree",
   ]) {
@@ -116,7 +116,7 @@ function build(root: HTMLElement): Refs {
     el(
       "p",
       undefined,
-      "Domain code talks to LLMClient and Embedder interfaces — not vendor SDKs. Adapters live in infra. That keeps the agent logic stable while models and providers change.",
+      "Domain code talks to LLMClient and Embedder interfaces, not vendor SDKs. Adapters live in infra. That keeps the agent logic stable while models and providers change.",
     ),
   );
   const arch = el("pre");
@@ -145,7 +145,7 @@ function build(root: HTMLElement): Refs {
     ),
   );
   const runPre = el("pre");
-  runPre.textContent = ["pip install cozmo", "cozmo"].join("\n");
+  runPre.textContent = ["pip install cozmo-agent", "cozmo"].join("\n");
   inner.append(runPre);
 
   doc.append(inner);
