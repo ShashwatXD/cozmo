@@ -17,7 +17,7 @@ from cozmo.prompts.loader import load_system_prompt
 
 @dataclass(frozen=True)
 class AgentEvent:
-    kind: str  # assistant | tool_call | tool_result | done
+    kind: str  # thinking | assistant | tool_call | tool_result | done
     text: str = ""
     tool_name: str = ""
 
@@ -75,6 +75,7 @@ class AgentRunner:
         self.last_result = None
 
         for step in range(1, self._max_steps + 1):
+            yield AgentEvent(kind="thinking")
             t0 = time.perf_counter()
             result: CompletionResult = self._llm.complete(
                 messages,
@@ -152,6 +153,7 @@ class AgentRunner:
                     )
                 )
 
+        yield AgentEvent(kind="thinking")
         result = self._llm.complete(messages, temperature=self._temperature, tools=None)
         total_usage = total_usage.merged(result.usage)
         text = result.content or "(max steps reached)"

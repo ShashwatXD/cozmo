@@ -184,7 +184,7 @@ def _run_agent_session(
     )
 
     typer.echo()
-    ux.print_banner()
+    ux.print_banner(clear=message is None)
     ux.print_session_status(
         provider=settings.provider,
         model=settings.model,
@@ -199,13 +199,20 @@ def _run_agent_session(
         _agent_once(runner, message, settings)
         return
 
-    ux.print_dim("Ask anything about this repo.")
-    ux.print_dim("/help  /clear  /config  /setup  /exit")
     while True:
         try:
-            text = typer.prompt("❯")
-        except typer.Abort:
+            from rich.console import Console
+            from rich.prompt import Prompt
+
+            text = Prompt.ask("[bold cyan]❯[/]", console=Console())
+        except (KeyboardInterrupt, EOFError):
+            typer.echo()
             break
+        except Exception:
+            try:
+                text = typer.prompt("❯")
+            except typer.Abort:
+                break
         raw = text.strip()
         if raw in {"/exit", "/quit", "exit", "quit"}:
             break
@@ -557,22 +564,42 @@ def _friendly_llm_error(exc: BaseException, settings: Settings) -> str:
 
 
 def _agent_once(runner: AgentRunner, text: str, settings: Settings) -> None:
+    from cozmo.cli.activity import Activity
+
+    act = Activity()
     try:
+        act.thinking()
         for event in runner.run_events(text):
-            if event.kind == "tool_call":
-                typer.secho(f"-> tool {event.tool_name}({event.text})", fg="cyan")
+            if event.kind == "thinking":
+                act.thinking()
+            elif event.kind == "tool_call":
+                act.tool(event.tool_name)
             elif event.kind == "tool_result":
-                preview = event.text if len(event.text) < 400 else event.text[:400] + "..."
-                typer.secho(f"<- {event.tool_name}: {preview}", fg="bright_black")
+                act.stop()
+                preview = (
+                    event.text if len(event.text) < 120 else event.text[:120] + "…"
+                )
+                typer.secho(
+                    f"  ✓ {event.tool_name}  {preview}",
+                    fg="bright_black",
+                )
+                act.thinking()
             elif event.kind == "assistant":
+                act.stop()
                 typer.echo(event.text)
-            elif event.kind == "done" and event.text:
-                typer.echo(event.text)
+                act.thinking()
+            elif event.kind == "done":
+                act.stop()
+                if event.text:
+                    typer.echo(event.text)
     except Exception as exc:  # noqa: BLE001 — surface as UX, don't dump traceback
         from cozmo.cli import ux as _ux
 
+        act.stop()
         _ux.print_err(_friendly_llm_error(exc, settings))
         return
+    finally:
+        act.stop()
     result = runner.last_result
     if result:
         _print_meter(settings.provider, settings.model, result.usage)

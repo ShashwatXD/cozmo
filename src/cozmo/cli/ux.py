@@ -1,4 +1,4 @@
-"""CLI banner, selects, and status output."""
+"""CLI banner, selects, and status — Cozmo (Anki) cyan OLED theme."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from cozmo import __version__
+from cozmo.cli import theme
 
 _SELECT_STYLE = None
 
@@ -15,17 +15,7 @@ def _style():
     if _SELECT_STYLE is None:
         from questionary import Style
 
-        _SELECT_STYLE = Style(
-            [
-                ("qmark", "fg:cyan bold"),
-                ("question", "bold"),
-                ("answer", "fg:cyan bold"),
-                ("pointer", "fg:cyan bold"),
-                ("highlighted", "fg:cyan bold"),
-                ("selected", "fg:cyan"),
-                ("instruction", "fg:#808080"),
-            ]
-        )
+        _SELECT_STYLE = Style(list(theme.QUESTIONARY))
     return _SELECT_STYLE
 
 def select(
@@ -87,22 +77,12 @@ def prompt_secret(prompt: str, *, required: bool = False, existing: str = "") ->
             return None
         typer.secho("  ✗ API key required — try again", fg="red")
 
-def print_banner() -> None:
-    try:
-        from rich.console import Console
-        from rich.panel import Panel
-        from rich.text import Text
+def print_banner(*, clear: bool = False) -> None:
+    """Launch splash: Cozmo face (clear screen on REPL)."""
+    from cozmo.cli.face import print_face
 
-        console = Console(stderr=False)
-        title = Text()
-        title.append("cozmo", style="bold cyan")
-        title.append(f"  v{__version__}", style="dim")
-        body = Text("coding agent · understands your repo\n", style="white")
-        body.append("type a task · /help for commands · /exit to quit", style="dim")
-        console.print(Panel(body, title=title, border_style="cyan", padding=(0, 2)))
-    except Exception:
-        typer.secho(f"cozmo v{__version__}", fg="cyan", bold=True)
-        typer.secho("coding agent · /help · /exit", fg="bright_black")
+    print_face(clear=clear)
+
 
 def print_session_status(
     *,
@@ -118,25 +98,25 @@ def print_session_status(
 
         console = Console()
         bits = [
-            f"[cyan]{provider}[/]/{model}",
-            f"[dim]{workdir}[/]",
+            f"[{theme.CYAN}]{provider}[/]/{model}",
+            f"[{theme.MUTED}]{workdir}[/]",
         ]
         if rag_chunks:
-            bits.append(f"[dim]rag:{rag_chunks}[/]")
+            bits.append(f"[{theme.MUTED}]rag:{rag_chunks}[/]")
         else:
-            bits.append("[yellow]rag:off[/]")
+            bits.append(f"[{theme.CYAN_DIM}]rag:off[/]")
         flags = []
         if allow_write:
             flags.append("write")
         if allow_shell:
             flags.append("shell")
         if flags:
-            bits.append("[dim]" + "+".join(flags) + "[/]")
+            bits.append(f"[{theme.MUTED}]" + "+".join(flags) + "[/]")
         console.print(" · ".join(bits))
     except Exception:
         typer.secho(
             f"{provider}/{model} · {workdir}",
-            fg="bright_black",
+            fg="cyan",
         )
 
 def print_ok(msg: str) -> None:
@@ -163,7 +143,7 @@ def print_setup_summary(path: Path, data: dict) -> None:
         table.add_row("embeddings", "auto (from provider)")
         table.add_row("config", str(path))
         console.print()
-        console.print("[bold green]Ready.[/] Launch with [cyan]cozmo[/]")
+        console.print("[bold cyan]Ready.[/] Launch with [cyan]cozmo[/]")
         console.print(table)
     except Exception:
         print_ok(f"saved {path}")
