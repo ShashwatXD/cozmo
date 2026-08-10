@@ -36,11 +36,19 @@ function build(root: HTMLElement): Refs {
   const content = el("div", "content");
 
   const top = el("div", "top");
-  const name = el("a", "top__name", "cozmo") as HTMLAnchorElement;
-  name.href = "#";
+  const brand = el("a", "top__brand") as HTMLAnchorElement;
+  brand.href = "#";
+  brand.setAttribute("aria-label", "cozmo");
+  const mark = document.createElement("img");
+  mark.className = "top__mark";
+  mark.src = "/logo.svg";
+  mark.alt = "";
+  mark.width = 44;
+  mark.height = 22;
+  brand.append(mark);
   const meta = el("div", "top__meta");
   meta.innerHTML = `v${VERSION} · <a href="${GITHUB}" target="_blank" rel="noreferrer">source</a>`;
-  top.append(name, meta);
+  top.append(brand, meta);
 
   const splash = el("section", "splash");
   const splashInner = el("div", "splash__inner");
@@ -49,7 +57,7 @@ function build(root: HTMLElement): Refs {
     el(
       "p",
       undefined,
-      "An LLM that reads your codebase, retrieves relevant context, and uses tools to reason and change code — under your control.",
+      "An LLM that reads your codebase, retrieves relevant context, and uses tools to reason and change code - under your control.",
     ),
   );
   const cmd = el("div", "cmd");
