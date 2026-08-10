@@ -16,7 +16,6 @@ from cozmo.graphs.dependency_graph import DependencyGraph
 from cozmo.graphs.import_graph import ImportGraph
 
 
-# ── helpers ──────────────────────────────────────────────────────────
 
 def _make_index() -> CodeIndex:
     """Two-file index with cross-imports."""
@@ -54,7 +53,6 @@ def _make_index() -> CodeIndex:
     return CodeIndex(files={"cozmo/alpha.py": fs_a, "cozmo/beta.py": fs_b})
 
 
-# ── DependencyGraph ─────────────────────────────────────────────────
 
 class TestDependencyGraph:
     def test_forward_dependency(self) -> None:
@@ -86,7 +84,6 @@ class TestDependencyGraph:
         assert "cozmo/alpha.py" in d
 
 
-# ── CallGraph ────────────────────────────────────────────────────────
 
 class TestCallGraph:
     def test_simple_call(self) -> None:
@@ -116,7 +113,6 @@ class TestCallGraph:
         assert isinstance(d, dict)
 
 
-# ── ImportGraph ──────────────────────────────────────────────────────
 
 class TestImportGraph:
     def test_internal_classification(self) -> None:

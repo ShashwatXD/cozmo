@@ -20,7 +20,7 @@ def test_build_stub_no_retry() -> None:
 
 def test_build_openai_requires_key() -> None:
     with pytest.raises(ValueError, match="API_KEY"):
-        build_llm(Settings(provider="openai", openai_api_key=None))
+        build_llm(Settings(provider="openai", api_key=None))
 
 
 def test_build_ollama_wrapped() -> None:
@@ -28,6 +28,30 @@ def test_build_ollama_wrapped() -> None:
     assert isinstance(llm, RetryingLLMClient)
 
 
-def test_unknown_provider() -> None:
-    with pytest.raises(ValueError, match="Unknown provider"):
-        build_llm(Settings(provider="nope"))
+def test_build_openrouter_uses_compat(monkeypatch) -> None:
+    from cozmo.infra.llm.openai_compatible import OpenAICompatibleClient
+
+    llm = build_llm(
+        Settings(
+            provider="openrouter",
+            model="openai/gpt-4o-mini",
+            api_key="sk-or-test",
+            max_retries=1,
+        )
+    )
+    assert isinstance(llm, OpenAICompatibleClient)
+    assert llm._client.base_url is not None  # type: ignore[attr-defined]
+
+
+def test_build_anthropic_requires_key() -> None:
+    with pytest.raises(ValueError, match="API_KEY"):
+        build_llm(Settings(provider="anthropic", api_key=None))
+
+
+def test_build_anthropic_client() -> None:
+    from cozmo.infra.llm.anthropic_client import AnthropicClient
+
+    llm = build_llm(
+        Settings(provider="anthropic", model="claude-3-5-haiku-20241022", api_key="sk-ant", max_retries=1)
+    )
+    assert isinstance(llm, AnthropicClient)

@@ -42,6 +42,19 @@ def test_read_write_search(tmp_path: Path) -> None:
     assert "a.txt" in ex.execute(search).content
 
 
+def test_search_repo_ignores_whitespace() -> None:
+    """``a-b`` must hit ``a - b`` in math_utils (literal grep used to miss this)."""
+    guard = WorkspaceGuard(FIXTURE, allow_write=False, allow_shell=False)
+    reg = build_default_registry(guard)
+    ex = ToolExecutor(reg)
+    result = ex.execute(
+        ToolCall(id="1", name="search_repo", arguments=json.dumps({"query": "a-b"}))
+    )
+    assert not result.is_error
+    assert "math_utils.py" in result.content
+    assert "a - b" in result.content or "a-b" in result.content.replace(" ", "")
+
+
 def test_shell_disabled(tmp_path: Path) -> None:
     guard = WorkspaceGuard(tmp_path, allow_shell=False)
     reg = build_default_registry(guard)

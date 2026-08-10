@@ -21,7 +21,6 @@ from cozmo.search.semantic_search import SemanticSearch
 from cozmo.search.symbol_search import SymbolSearch
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────
 
 
 def _make_symbol(
@@ -67,7 +66,6 @@ SOURCES: dict[str, str] = {
 }
 
 
-# ── SymbolSearch ──────────────────────────────────────────────────────
 
 
 class TestSymbolSearch:
@@ -104,7 +102,6 @@ class TestSymbolSearch:
         assert len(results) <= 2
 
 
-# ── ReferenceSearch ───────────────────────────────────────────────────
 
 
 class TestReferenceSearch:
@@ -122,7 +119,6 @@ class TestReferenceSearch:
         assert txt_refs[0].context == "Text match"
 
 
-# ── HybridSearch ──────────────────────────────────────────────────────
 
 
 class TestHybridSearch:
@@ -157,7 +153,6 @@ class TestHybridSearch:
         assert both
 
 
-# ── SemanticSearch ────────────────────────────────────────────────────
 
 
 class TestSemanticSearch:

@@ -11,7 +11,7 @@ def test_version_defined() -> None:
 def test_settings_defaults() -> None:
     s = Settings(provider="stub", model="stub-model")
     assert s.provider == "stub"
-    assert s.openai_api_key is None
+    assert s.api_key is None
 
 
 def test_load_settings_does_not_crash() -> None:
