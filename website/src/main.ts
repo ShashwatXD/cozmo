@@ -37,7 +37,8 @@ function build(root: HTMLElement): Refs {
 
   const content = el("div", "content");
 
-  const top = el("div", "top");
+  const top = el("header", "top");
+  const topInner = el("div", "top__inner");
   const brand = el("a", "top__brand") as HTMLAnchorElement;
   brand.href = "#";
   brand.setAttribute("aria-label", "cozmo");
@@ -45,16 +46,19 @@ function build(root: HTMLElement): Refs {
   mark.className = "top__mark";
   mark.src = "/logo.svg";
   mark.alt = "";
-  mark.width = 44;
-  mark.height = 22;
-  brand.append(mark);
+  mark.width = 40;
+  mark.height = 20;
+  const name = el("span", "top__name", "cozmo");
+  brand.append(mark, name);
   const meta = el("div", "top__meta");
   meta.innerHTML = `v${VERSION} · <a href="${GITHUB}" target="_blank" rel="noreferrer">github</a>`;
-  top.append(brand, meta);
+  topInner.append(brand, meta);
+  top.append(topInner);
 
   const hero = el("section", "hero");
   const heroInner = el("div", "hero__inner");
   heroInner.append(
+    el("p", "hero__eyebrow", "CLI coding agent"),
     el("h1", undefined, "Coding agent for your repo"),
     el(
       "p",
@@ -84,7 +88,11 @@ function build(root: HTMLElement): Refs {
 
   specInner.append(
     section("Run", [
-      el("p", undefined, "After install, open any project and run cozmo. First launch configures provider and model."),
+      el(
+        "p",
+        undefined,
+        "Open any project and run cozmo. First launch configures provider and model.",
+      ),
       (() => {
         const pre = el("pre");
         pre.textContent = "cozmo";
@@ -96,9 +104,9 @@ function build(root: HTMLElement): Refs {
         const ul = el("ul");
         for (const item of [
           "ReAct loop with bounded steps and structured tool errors",
-          "Hybrid retrieval: embeddings plus lexical search over the index",
-          "Symbol and reference lookup from a parsed code index",
-          "OpenAI, OpenRouter, Ollama, or any OpenAI-compatible API",
+          "Hybrid retrieval over the local index",
+          "Symbol and reference lookup",
+          "OpenAI, OpenRouter, Ollama, or compatible APIs",
         ]) {
           ul.append(el("li", undefined, item));
         }
@@ -109,7 +117,7 @@ function build(root: HTMLElement): Refs {
       el(
         "p",
         undefined,
-        "Config lives in ~/.cozmo/config.json. Repo state in .cozmo/. Shell and writes are off unless you allow them.",
+        "Config in ~/.cozmo/config.json. Repo state in .cozmo/. Shell and writes stay off until you allow them.",
       ),
     ]),
   );
@@ -117,7 +125,8 @@ function build(root: HTMLElement): Refs {
   spec.append(specInner);
 
   const foot = el("footer", "foot");
-  foot.append(
+  const footInner = el("div", "foot__inner");
+  footInner.append(
     el("span", undefined, `cozmo ${VERSION}`),
     (() => {
       const a = el("a", undefined, "github.com/ShashwatXD/cozmo") as HTMLAnchorElement;
@@ -127,6 +136,7 @@ function build(root: HTMLElement): Refs {
       return a;
     })(),
   );
+  foot.append(footInner);
 
   content.append(top, hero, spec, foot);
   root.append(stage, content);
