@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cozmo-agent"
-version = "0.2.0"
-description = "CLI AI coding agent: ReAct tools, hybrid RAG, multi-provider LLMs"
+version = "0.3.0"
+description = "Local-first CLI coding agent: multi-model ReAct, hybrid RAG, guardrails"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -50,6 +50,9 @@ dev = [
     "pytest>=8.0",
     "build>=1.2",
     "twine>=5.0",
+]
+vector = [
+    "chromadb>=0.5",
 ]
 
 [project.urls]
