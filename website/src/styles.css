@@ -115,34 +115,9 @@ a:hover {
   margin: 0 auto;
   padding: 0.9rem var(--pad);
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 1rem;
-}
-
-.top__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-  line-height: 0;
-}
-
-.top__brand:hover {
-  opacity: 0.75;
-}
-
-.top__mark {
-  display: block;
-  width: 40px;
-  height: 20px;
-}
-
-.top__name {
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  line-height: 1;
 }
 
 .top__meta {
@@ -555,10 +530,6 @@ a:hover {
 
   .install__row {
     max-width: 100%;
-  }
-
-  .top__name {
-    display: none;
   }
 }
 

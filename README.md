@@ -2,7 +2,7 @@
 
 **Local-first CLI coding agent** for your repository.
 
-Owned ReAct loop, multi-model routing, hybrid RAG, permission-gated tools, and production-style guardrails — without a LangChain dependency.
+Owned ReAct loop, multi-model routing, hybrid RAG, permission-gated tools, and production-style guardrails, without a LangChain dependency.
 
 [![PyPI](https://img.shields.io/pypi/v/cozmo-agent.svg)](https://pypi.org/project/cozmo-agent/)
 [![Python](https://img.shields.io/pypi/pyversions/cozmo-agent.svg)](https://pypi.org/project/cozmo-agent/)
@@ -22,7 +22,7 @@ Package name on PyPI is `cozmo-agent`; the CLI binary is `cozmo`. Requires **Pyt
 
 | Concern | Approach |
 |---------|----------|
-| Control | You own the agent loop — steps, tools, memory, stop reasons |
+| Control | You own the agent loop: steps, tools, memory, stop reasons |
 | Cost / quality | Orchestrator + worker models; optional cheap worker for tool calls |
 | Safety | Workspace sandbox; writes and shell off until enabled |
 | Context | Auto compaction + hard budgets (steps, tools, cost, time) |
@@ -146,7 +146,7 @@ Default store is JSON under `.cozmo/index.json`. Chroma is optional (`vector_bac
 
 ### Subagents
 
-The worker may call `run_subtask` with a goal. A child agent runs with read/search tools only, tighter step limits, and returns a **JSON summary** — not a full transcript — so the parent context stays small.
+The worker may call `run_subtask` with a goal. A child agent runs with read/search tools only, tighter step limits, and returns a **JSON summary** (not a full transcript) so the parent context stays small.
 
 ### Permissions
 
@@ -239,4 +239,4 @@ cd website && npm install && npm run dev   # marketing site
 
 ## License
 
-MIT. Named after [Anki Cozmo](https://www.digitaldreamlabs.com/pages/cozmo) — unaffiliated fan project.
+MIT. Named after [Anki Cozmo](https://www.digitaldreamlabs.com/pages/cozmo); unaffiliated fan project.

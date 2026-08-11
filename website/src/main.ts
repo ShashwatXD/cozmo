@@ -39,20 +39,9 @@ function build(root: HTMLElement): Refs {
 
   const top = el("header", "top");
   const topInner = el("div", "top__inner");
-  const brand = el("a", "top__brand") as HTMLAnchorElement;
-  brand.href = "#";
-  brand.setAttribute("aria-label", "cozmo");
-  const mark = document.createElement("img");
-  mark.className = "top__mark";
-  mark.src = "/logo.svg";
-  mark.alt = "";
-  mark.width = 40;
-  mark.height = 20;
-  const name = el("span", "top__name", "cozmo");
-  brand.append(mark, name);
   const meta = el("div", "top__meta");
   meta.innerHTML = `v${VERSION} · <a href="${GITHUB}" target="_blank" rel="noreferrer">github</a>`;
-  topInner.append(brand, meta);
+  topInner.append(meta);
   top.append(topInner);
 
   const hero = el("section", "hero");
