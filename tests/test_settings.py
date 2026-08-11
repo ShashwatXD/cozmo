@@ -9,9 +9,12 @@ def test_version_defined() -> None:
 
 
 def test_settings_defaults() -> None:
-    s = Settings(provider="stub", model="stub-model")
+    # Explicit api_key=None so a developer .env does not fail CI/local asserts.
+    s = Settings(provider="stub", model="stub-model", api_key=None)
     assert s.provider == "stub"
     assert s.api_key is None
+    assert s.vector_backend == "json"
+    assert s.history_enabled is True
 
 
 def test_load_settings_does_not_crash() -> None:

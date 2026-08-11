@@ -14,6 +14,16 @@ def test_for_prompt_includes_system() -> None:
     assert prompt[1].content == "hi"
 
 
+def test_for_prompt_includes_summary() -> None:
+    mem = ConversationMemory(max_messages=10)
+    mem.summary = "User wants RAG."
+    mem.add(Message(role=Role.USER, content="hi"))
+    prompt = mem.for_prompt("SYS")
+    assert prompt[0].content == "SYS"
+    assert "Session summary" in prompt[1].content
+    assert prompt[2].content == "hi"
+
+
 def test_sliding_window_keeps_newest() -> None:
     mem = ConversationMemory(max_messages=4)
     for i in range(10):
