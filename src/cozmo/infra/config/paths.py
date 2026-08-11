@@ -22,3 +22,20 @@ def workspace_dir(workdir: Path) -> Path:
 def project_config_path(workdir: Path | None = None) -> Path:
     root = (workdir or Path.cwd()).resolve()
     return workspace_dir(root) / CONFIG_FILENAME
+
+
+def user_history_dir() -> Path:
+    return user_config_dir() / "history"
+
+
+def workspace_history_dir(workdir: Path | None = None) -> Path:
+    root = (workdir or Path.cwd()).resolve()
+    return workspace_dir(root) / "history"
+
+
+def session_events_path(workdir: Path, session_id: str) -> Path:
+    return workspace_history_dir(workdir) / f"{session_id}.jsonl"
+
+
+def sessions_index_path(workdir: Path | None = None) -> Path:
+    return workspace_history_dir(workdir) / "sessions.jsonl"

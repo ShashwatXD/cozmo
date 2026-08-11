@@ -13,8 +13,12 @@ from cozmo import __version__
 from cozmo.app.agent import AgentRunner
 from cozmo.app.chat import ChatUseCase
 from cozmo.app.eval_runner import run_eval
+from cozmo.app.history import SessionHistory
+from cozmo.app.model_router import build_llm_bundle
+from cozmo.app.subagent import SubAgentService, register_subagent_tool
 from cozmo.domain.completion import Usage
 from cozmo.domain.cost import format_cost_line
+from cozmo.domain.guardrails import AgentPolicy
 from cozmo.domain.memory import ConversationMemory
 from cozmo.infra.config.paths import (
     project_config_path,
@@ -25,10 +29,13 @@ from cozmo.infra.config.paths import (
 from cozmo.cli import ux
 from cozmo.cli.setup_wizard import run_setup
 from cozmo.infra.config.store import load_user_config, save_user_config
+from cozmo.infra.history import JsonlEventStore
+from cozmo.infra.history.null import NullEventStore
 from cozmo.infra.llm.factory import build_llm
-from cozmo.infra.rag import RepoIndexer, VectorStore
-from cozmo.infra.rag.factory import build_embedder
-from cozmo.infra.rag.paths import index_path, load_store
+from cozmo.infra.rag import RepoIndexer
+from cozmo.infra.rag.factory import build_embedder, build_vector_store
+from cozmo.infra.rag.paths import index_path
+from cozmo.infra.rag.store import JsonVectorStore
 from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools import build_default_registry
 from cozmo.infra.tools.permissions import WorkspaceGuard
@@ -58,6 +65,7 @@ def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
     return {
         "provider": settings.provider,
         "model": settings.model,
+        "worker_model": settings.worker_model,
         "workdir": str(settings.workdir),
         "api_key": settings.api_key,
         "base_url": settings.base_url,
@@ -69,8 +77,20 @@ def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
         "allow_shell": settings.allow_shell,
         "max_agent_steps": settings.max_agent_steps,
         "memory_max_messages": settings.memory_max_messages,
+        "max_messages_before_compact": settings.max_messages_before_compact,
+        "context_token_budget": settings.context_token_budget,
+        "max_tool_calls_per_session": settings.max_tool_calls_per_session,
+        "max_cost_usd": settings.max_cost_usd,
+        "session_timeout_s": settings.session_timeout_s,
+        "max_subagent_depth": settings.max_subagent_depth,
+        "max_subagent_steps": settings.max_subagent_steps,
+        "shell_timeout_s": settings.shell_timeout_s,
         "embedder": settings.embedder,
         "embedding_model": settings.embedding_model,
+        "vector_backend": settings.vector_backend,
+        "history_enabled": settings.history_enabled,
+        "history_max_sessions": settings.history_max_sessions,
+        "history_max_events_per_session": settings.history_max_events_per_session,
         "trace_enabled": settings.trace_enabled,
         "log_level": settings.log_level,
     }
@@ -91,10 +111,18 @@ def _ensure_config() -> None:
 
 def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -> None:
     embedder = build_embedder(settings)
-    store = VectorStore()
+    store = JsonVectorStore()
     n = RepoIndexer(embedder, store).index_dir(root_dir)
     out = index_path(root_dir)
-    store.save(out)
+    # Persist via selected backend (chroma also writes JSON mirror).
+    backend = build_vector_store(settings, root_dir)
+    if settings.vector_backend == "chroma":
+        backend.clear()
+        for chunk, emb in store.items():
+            backend.add(chunk, emb)
+        backend.save(out)
+    else:
+        store.save(out)
     if not quiet:
         typer.secho(f"indexed {n} chunks → {out}", fg="bright_black")
 
@@ -136,7 +164,8 @@ def _run_agent_session(
         allow_shell=settings.allow_shell,
     )
     embedder = build_embedder(settings)
-    store = load_store(root_dir)
+    store = build_vector_store(settings, root_dir)
+    policy = AgentPolicy.from_settings(settings)
 
     code_index = None
     sources: dict[str, str] = {}
@@ -164,23 +193,54 @@ def _run_agent_session(
         embedder=embedder,
         code_index=code_index,
         sources=sources,
+        shell_timeout_s=settings.shell_timeout_s,
     )
     executor = ToolExecutor(registry)
-    llm = build_llm(settings)
+    models = build_llm_bundle(settings)
     memory = ConversationMemory(max_messages=settings.memory_max_messages)
     trace_path = root_dir / ".cozmo" / "traces.jsonl"
     tracer = Tracer(
         trace_path if settings.trace_enabled else None,
         enabled=settings.trace_enabled,
     )
-    runner = AgentRunner(
-        llm,
+    event_store = (
+        JsonlEventStore(
+            root_dir,
+            enabled=settings.history_enabled,
+            max_sessions=settings.history_max_sessions,
+            max_events_per_session=settings.history_max_events_per_session,
+        )
+        if settings.history_enabled
+        else NullEventStore()
+    )
+    history = SessionHistory(event_store)
+    history.session_start(
+        provider=settings.provider,
+        model=settings.model,
+        worker_model=settings.worker_model or settings.model,
+        workdir=str(root_dir),
+    )
+    register_subagent_tool(
         registry,
-        executor,
+        SubAgentService(
+            models=models,
+            parent_registry=registry,
+            policy=policy,
+            history=history,
+            temperature=settings.temperature,
+            model_name=settings.worker_model or settings.model,
+        ),
+    )
+    runner = AgentRunner(
+        models=models,
+        registry=registry,
+        executor=executor,
         memory=memory,
         tracer=tracer,
+        history=history,
+        policy=policy,
         temperature=settings.temperature,
-        max_steps=settings.max_agent_steps,
+        model_name=settings.worker_model or settings.model,
     )
 
     typer.echo()
@@ -197,6 +257,7 @@ def _run_agent_session(
 
     if message is not None:
         _agent_once(runner, message, settings)
+        history.session_end()
         return
 
     while True:
@@ -218,15 +279,43 @@ def _run_agent_session(
             break
         if raw in {"/help", "help"}:
             typer.echo(
-                "  /clear   reset conversation memory\n"
-                "  /config  show config paths\n"
-                "  /setup   re-run provider wizard\n"
-                "  /exit    quit"
+                "  /clear    reset conversation memory\n"
+                "  /compact  summarize older turns now\n"
+                "  /history  list recent sessions\n"
+                "  /config   show config paths\n"
+                "  /setup    re-run provider wizard\n"
+                "  /exit     quit"
             )
             continue
         if raw == "/clear":
             memory.clear()
             ux.print_dim("memory cleared")
+            continue
+        if raw == "/compact":
+            from cozmo.app.compaction import compact_memory
+
+            summary = compact_memory(
+                memory,
+                models.orchestrator,
+                policy,
+                temperature=settings.temperature,
+            )
+            if summary:
+                history.compact(summary)
+                ux.print_dim("memory compacted")
+            else:
+                ux.print_dim("nothing to compact")
+            continue
+        if raw == "/history":
+            rows = history.list_recent_sessions(limit=10)
+            if not rows:
+                ux.print_dim("no sessions yet")
+            else:
+                for row in rows:
+                    typer.echo(
+                        f"  {row.get('id')}  model={row.get('model', '?')}  "
+                        f"ts={row.get('started_at', '?')}"
+                    )
             continue
         if raw == "/config":
             typer.echo(f"  {user_config_path()}")
@@ -238,6 +327,7 @@ def _run_agent_session(
         if not raw:
             continue
         _agent_once(runner, text, settings)
+    history.session_end()
 
 @app.callback(invoke_without_command=True)
 def root(
@@ -572,6 +662,10 @@ def _agent_once(runner: AgentRunner, text: str, settings: Settings) -> None:
         for event in runner.run_events(text):
             if event.kind == "thinking":
                 act.thinking()
+            elif event.kind == "compact":
+                act.stop()
+                ux.print_dim("memory compacted")
+                act.thinking()
             elif event.kind == "tool_call":
                 act.tool(event.tool_name)
             elif event.kind == "tool_result":
@@ -588,6 +682,10 @@ def _agent_once(runner: AgentRunner, text: str, settings: Settings) -> None:
                 act.stop()
                 typer.echo(event.text)
                 act.thinking()
+            elif event.kind == "stopped":
+                act.stop()
+                if event.stop_reason and event.stop_reason != "completed":
+                    ux.print_dim(f"stopped: {event.stop_reason}")
             elif event.kind == "done":
                 act.stop()
                 if event.text:
@@ -603,7 +701,10 @@ def _agent_once(runner: AgentRunner, text: str, settings: Settings) -> None:
     result = runner.last_result
     if result:
         _print_meter(settings.provider, settings.model, result.usage)
-        typer.secho(f"steps={result.steps}", fg="bright_black")
+        typer.secho(
+            f"steps={result.steps} stop={result.stop_reason.value}",
+            fg="bright_black",
+        )
 
 def _print_meter(provider: str, model: str, usage: Usage) -> None:
     line = format_cost_line(provider=provider, model=model, usage=usage)

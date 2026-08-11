@@ -1,12 +1,13 @@
-"""Conversation memory - sliding window over chat turns."""
+"""Conversation memory - sliding window + optional rolling summary."""
 
 from __future__ import annotations
 
 from cozmo.domain.messages import Message, Role
 
+
 class ConversationMemory:
     """
-    Stores non-system messages; for_prompt() returns system + trimmed history.
+    Stores non-system messages; for_prompt() returns system + summary + trimmed history.
     Avoids starting the window on an orphan tool message.
     """
 
@@ -15,12 +16,22 @@ class ConversationMemory:
             raise ValueError("max_messages must be >= 2")
         self._max = max_messages
         self._history: list[Message] = []
+        self._summary: str | None = None
 
     def __len__(self) -> int:
         return len(self._history)
 
+    @property
+    def summary(self) -> str | None:
+        return self._summary
+
+    @summary.setter
+    def summary(self, value: str | None) -> None:
+        self._summary = value.strip() if value and value.strip() else None
+
     def clear(self) -> None:
         self._history.clear()
+        self._summary = None
 
     def add(self, message: Message) -> None:
         if message.role == Role.SYSTEM:
@@ -38,10 +49,16 @@ class ConversationMemory:
         return list(self._history)
 
     def for_prompt(self, system_prompt: str) -> list[Message]:
-        return [
-            Message(role=Role.SYSTEM, content=system_prompt),
-            *self._window(self._history),
-        ]
+        out = [Message(role=Role.SYSTEM, content=system_prompt)]
+        if self._summary:
+            out.append(
+                Message(
+                    role=Role.SYSTEM,
+                    content=f"Session summary so far:\n{self._summary}",
+                )
+            )
+        out.extend(self._window(self._history))
+        return out
 
     def _window(self, history: list[Message]) -> list[Message]:
         if len(history) <= self._max:

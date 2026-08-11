@@ -1,10 +1,11 @@
-"""Embedding + reranking ports for RAG."""
+"""Embedding + reranking + vector store ports for RAG."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Protocol, Sequence, runtime_checkable
 
-from cozmo.domain.rag import RetrievalCandidate
+from cozmo.domain.rag import Chunk, RetrievalCandidate, SearchHit
 
 
 @runtime_checkable
@@ -28,3 +29,20 @@ class Reranker(Protocol):
         top_k: int = 10,
     ) -> list[RetrievalCandidate]:
         ...
+
+
+@runtime_checkable
+class VectorStore(Protocol):
+    """Chunk embeddings with top-k search (JSON or ANN backend in infra)."""
+
+    def __len__(self) -> int: ...
+
+    def clear(self) -> None: ...
+
+    def add(self, chunk: Chunk, embedding: list[float]) -> None: ...
+
+    def items(self) -> list[tuple[Chunk, list[float]]]: ...
+
+    def search(self, query_embedding: list[float], *, top_k: int = 5) -> list[SearchHit]: ...
+
+    def save(self, path: Path) -> None: ...

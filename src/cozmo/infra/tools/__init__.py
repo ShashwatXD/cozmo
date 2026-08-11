@@ -122,6 +122,7 @@ def build_default_registry(
     embedder: Any | None = None,
     code_index: Any | None = None,
     sources: dict[str, str] | None = None,
+    shell_timeout_s: float = 60.0,
 ) -> ToolRegistry:
     """Register default workspace tools (read, write, search, git, optional RAG)."""
     reg = ToolRegistry()
@@ -177,7 +178,7 @@ def build_default_registry(
             cwd=guard.workdir,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=shell_timeout_s,
         )
         out = (proc.stdout or "") + (proc.stderr or "")
         return f"exit={proc.returncode}\n{out[:20_000]}"

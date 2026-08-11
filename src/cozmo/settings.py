@@ -39,6 +39,8 @@ class Settings(BaseSettings):
 
     provider: str = "stub"
     model: str = "stub-model"
+    worker_model: str | None = None
+    verifier_model: str | None = None
     workdir: Path = Field(default=Path("."))
     api_key: str | None = Field(
         default=None,
@@ -57,8 +59,20 @@ class Settings(BaseSettings):
     allow_shell: bool = False
     max_agent_steps: int = 8
     memory_max_messages: int = 40
+    max_messages_before_compact: int = 30
+    context_token_budget: int = 24_000
+    max_tool_calls_per_session: int = 40
+    max_cost_usd: float | None = None
+    session_timeout_s: float | None = 600.0
+    max_subagent_depth: int = 1
+    max_subagent_steps: int = 4
+    shell_timeout_s: float = 60.0
     embedder: str = "auto"
     embedding_model: str = "text-embedding-3-small"
+    vector_backend: str = "json"
+    history_enabled: bool = True
+    history_max_sessions: int = 50
+    history_max_events_per_session: int = 2000
     trace_enabled: bool = True
     log_level: str = "INFO"
 

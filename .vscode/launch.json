@@ -1,22 +1,20 @@
 {
   "version": "0.2.0",
   "configurations": [
-    // ──────────────────────────────────────────
-    // STEP 1: Run this FIRST to build the index
-    // ──────────────────────────────────────────
     {
-      "name": "1️⃣ Index: cozmo source (run first!)",
+      "name": "Index: cozmo source",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
-      "args": ["index", "-w", "${workspaceFolder}/src"],
+      "args": ["index", "-w", "${workspaceFolder}"],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python"
     },
     {
-      "name": "1️⃣ Index: tiny_repo fixture",
+      "name": "Index: tiny_repo",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
@@ -24,132 +22,23 @@
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python"
     },
-
-    // ──────────────────────────────────────────
-    // STEP 2: RAG demo questions (semantic_search)
-    //   These ask by MEANING, not exact names
-    // ──────────────────────────────────────────
     {
-      "name": "2️⃣ RAG: How does error handling work?",
+      "name": "Agent: REPL (workspace)",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
-      "args": [
-        "agent", "-w", "${workspaceFolder}/src",
-        "-m", "How does error handling and retry logic work in this codebase? Search semantically."
-      ],
+      "args": ["agent", "-w", "${workspaceFolder}"],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python"
     },
     {
-      "name": "2️⃣ RAG: Find code about embeddings",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "cozmo.cli.main",
-      "args": [
-        "agent", "-w", "${workspaceFolder}/src",
-        "-m", "Find all code related to text embeddings and vector similarity. Use semantic_search."
-      ],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
-      "justMyCode": true,
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "2️⃣ RAG: How does the agent decide tools?",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "cozmo.cli.main",
-      "args": [
-        "agent", "-w", "${workspaceFolder}/src",
-        "-m", "How does the agent decide which tool to call? Search for tool selection and decision logic."
-      ],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
-      "justMyCode": true,
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "2️⃣ RAG: Find cost tracking code",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "cozmo.cli.main",
-      "args": [
-        "agent", "-w", "${workspaceFolder}/src",
-        "-m", "Find where token costs and pricing are calculated. Use semantic_search for 'cost estimation'."
-      ],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
-      "justMyCode": true,
-      "console": "integratedTerminal"
-    },
-
-    // ──────────────────────────────────────────
-    // STEP 3: Code Intelligence demos (symbol_search, find_references, graphs)
-    // ──────────────────────────────────────────
-    {
-      "name": "3️⃣ Intel: Where is AgentRunner defined?",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "cozmo.cli.main",
-      "args": [
-        "agent", "-w", "${workspaceFolder}/src",
-        "-m", "Where is the AgentRunner class defined? Use symbol_search."
-      ],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
-      "justMyCode": true,
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "3️⃣ Intel: Who uses ToolRegistry?",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "cozmo.cli.main",
-      "args": [
-        "agent", "-w", "${workspaceFolder}/src",
-        "-m", "Find all places where ToolRegistry is used. Use find_references."
-      ],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
-      "justMyCode": true,
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "3️⃣ Intel: Show dependency graph",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "cozmo.cli.main",
-      "args": [
-        "agent", "-w", "${workspaceFolder}/src",
-        "-m", "Show me the dependency graph. What files depend on domain/tools.py?"
-      ],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
-      "justMyCode": true,
-      "console": "integratedTerminal"
-    },
-
-    // ──────────────────────────────────────────
-    // STEP 4: REPL mode — ask anything interactively
-    // ──────────────────────────────────────────
-    {
-      "name": "4️⃣ Agent REPL (cozmo source)",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "cozmo.cli.main",
-      "args": ["agent", "-w", "${workspaceFolder}/src"],
-      "cwd": "${workspaceFolder}",
-      "envFile": "${workspaceFolder}/.env",
-      "justMyCode": true,
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "4️⃣ Agent REPL (tiny_repo)",
+      "name": "Agent: REPL (tiny_repo)",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
@@ -157,22 +46,64 @@
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python"
     },
-
-    // ──────────────────────────────────────────
-    // Original configs (unchanged)
-    // ──────────────────────────────────────────
+    {
+      "name": "Agent: one-shot RAG",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cozmo.cli.main",
+      "args": [
+        "agent",
+        "-w",
+        "${workspaceFolder}",
+        "-m",
+        "How does error handling and retry logic work? Use semantic_search."
+      ],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python"
+    },
+    {
+      "name": "Agent: one-shot symbols",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cozmo.cli.main",
+      "args": [
+        "agent",
+        "-w",
+        "${workspaceFolder}",
+        "-m",
+        "Where is AgentRunner defined? Use symbol_search."
+      ],
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python"
+    },
     {
       "name": "Chat (Ollama)",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
-      "args": ["chat", "-p", "ollama", "--model", "qwen2.5:3b", "-m", "Say hello in one sentence"],
+      "args": [
+        "chat",
+        "-p",
+        "ollama",
+        "--model",
+        "qwen2.5:3b",
+        "-m",
+        "Say hello in one sentence"
+      ],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python"
     },
     {
       "name": "Eval",
@@ -183,17 +114,71 @@
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python"
     },
     {
-      "name": "Pytest",
+      "name": "Pytest: all",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": ["-q"],
       "cwd": "${workspaceFolder}",
       "justMyCode": true,
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    },
+    {
+      "name": "Pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q", "${file}"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    },
+    {
+      "name": "Pytest: guardrails + history",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-q",
+        "tests/test_guardrails.py",
+        "tests/test_history_store.py",
+        "tests/test_compaction.py",
+        "tests/test_subagent.py",
+        "tests/test_events.py"
+      ],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    },
+    {
+      "name": "Pytest: verbose failed",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-vv", "--tb=short", "--maxfail=5"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true,
+      "console": "integratedTerminal",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
     }
   ]
 }

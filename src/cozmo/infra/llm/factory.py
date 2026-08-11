@@ -11,11 +11,13 @@ _OLLAMA_BASE = "http://127.0.0.1:11434/v1"
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 _OPENAI_COMPAT = frozenset({"openai", "openrouter"})
 
+
 def build_llm(settings: Settings) -> LLMClient:
     inner = _build_inner(settings)
     if settings.max_retries <= 1:
         return inner
     return RetryingLLMClient(inner, max_attempts=settings.max_retries)
+
 
 def _compat_base_url(settings: Settings) -> str | None:
     if settings.base_url:
@@ -23,6 +25,7 @@ def _compat_base_url(settings: Settings) -> str | None:
     if settings.provider == "openrouter":
         return _OPENROUTER_BASE
     return None
+
 
 def _build_inner(settings: Settings) -> LLMClient:
     if settings.provider == "stub":

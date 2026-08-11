@@ -1,4 +1,4 @@
-"""In-memory / JSON vector store."""
+"""In-memory / JSON vector store (default VectorStore backend)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 
 from cozmo.domain.rag import Chunk, SearchHit
 
+
 def cosine(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
@@ -17,8 +18,9 @@ def cosine(a: list[float], b: list[float]) -> float:
     nb = math.sqrt(sum(y * y for y in b)) or 1.0
     return dot / (na * nb)
 
-class VectorStore:
-    """In-memory chunk embeddings with cosine top-k search."""
+
+class JsonVectorStore:
+    """In-memory chunk embeddings with cosine top-k search; persists to JSON."""
 
     def __init__(self) -> None:
         self._items: list[tuple[Chunk, list[float]]] = []
@@ -51,7 +53,7 @@ class VectorStore:
         path.write_text(json.dumps(payload), encoding="utf-8")
 
     @classmethod
-    def load(cls, path: Path) -> "VectorStore":
+    def load(cls, path: Path) -> JsonVectorStore:
         store = cls()
         if not path.exists():
             return store
@@ -68,3 +70,7 @@ class VectorStore:
                 row["embedding"],
             )
         return store
+
+
+# Backward-compatible alias — prefer JsonVectorStore or domain VectorStore Protocol.
+VectorStore = JsonVectorStore

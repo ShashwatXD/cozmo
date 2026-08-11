@@ -2,7 +2,7 @@ import "./styles.css";
 import { MASCOT } from "./mascot";
 
 const PIP = "pipx install cozmo-agent";
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const GITHUB = "https://github.com/ShashwatXD/cozmo";
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -58,12 +58,12 @@ function build(root: HTMLElement): Refs {
   const hero = el("section", "hero");
   const heroInner = el("div", "hero__inner");
   heroInner.append(
-    el("p", "hero__eyebrow", "CLI coding agent"),
-    el("h1", undefined, "Coding agent for your repo"),
+    el("p", "hero__eyebrow", "CLI · multi-model · local-first"),
+    el("h1", undefined, "Production-grade agent for your repo"),
     el(
       "p",
       "hero__lead",
-      "Runs locally. Indexes the project once, then answers and edits with tools under your permissions.",
+      "Orchestrator and worker models, guardrails, session history, and hybrid retrieval - all in one terminal session under your permissions.",
     ),
   );
 
@@ -82,6 +82,52 @@ function build(root: HTMLElement): Refs {
   install.append(label, row, hint);
   heroInner.append(install);
   hero.append(heroInner);
+
+  const flow = el("section", "flow");
+  const flowInner = el("div", "flow__inner");
+  flowInner.append(
+    el("h2", undefined, "How a turn runs"),
+    el(
+      "p",
+      "flow__lead",
+      "Multi-model by role. Soft compaction when context grows. Hard stops on budgets. Subagents explore without polluting the main thread.",
+    ),
+  );
+
+  const chart = el("div", "flow__chart");
+  chart.setAttribute("role", "img");
+  chart.setAttribute(
+    "aria-label",
+    "User to guardrails to orchestrator or worker to tools or subagent to answer, with history on disk",
+  );
+
+  const nodes: { id: string; label: string; sub: string }[] = [
+    { id: "user", label: "User", sub: "REPL / -m" },
+    { id: "rails", label: "Guardrails", sub: "compact · kill" },
+    { id: "orch", label: "Orchestrator", sub: "strong model" },
+    { id: "work", label: "Worker", sub: "tool loop" },
+    { id: "tools", label: "Tools + RAG", sub: "search · edit" },
+    { id: "sub", label: "Subagent", sub: "scoped explore" },
+    { id: "out", label: "Answer", sub: "history JSONL" },
+  ];
+
+  const track = el("div", "flow__track");
+  nodes.forEach((n, i) => {
+    const cell = el("div", `flow__node flow__node--${n.id}`);
+    cell.append(el("span", "flow__label", n.label), el("span", "flow__sub", n.sub));
+    track.append(cell);
+    if (i < nodes.length - 1) {
+      track.append(el("span", "flow__arrow", "→"));
+    }
+  });
+  chart.append(track);
+
+  const split = el("div", "flow__split");
+  split.innerHTML =
+    '<span class="flow__split-note">worker may call <code>run_subtask</code> → child returns JSON summary only</span>';
+  chart.append(split);
+  flowInner.append(chart);
+  flow.append(flowInner);
 
   const spec = el("section", "spec");
   const specInner = el("div", "spec__inner");
@@ -103,10 +149,10 @@ function build(root: HTMLElement): Refs {
       (() => {
         const ul = el("ul");
         for (const item of [
-          "ReAct loop with bounded steps and structured tool errors",
-          "Hybrid retrieval over the local index",
-          "Symbol and reference lookup",
-          "OpenAI, OpenRouter, Ollama, or compatible APIs",
+          "Multi-model: orchestrator + worker (+ optional verifier)",
+          "Guardrails: compact context, max steps, cost/time kills",
+          "Subagents for scoped explore without flooding memory",
+          "Hybrid RAG + symbols; session history under .cozmo/",
         ]) {
           ul.append(el("li", undefined, item));
         }
@@ -138,7 +184,7 @@ function build(root: HTMLElement): Refs {
   );
   foot.append(footInner);
 
-  content.append(top, hero, spec, foot);
+  content.append(top, hero, flow, spec, foot);
   root.append(stage, content);
 
   return { copyBtn, hint, top };

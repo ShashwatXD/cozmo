@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from cozmo.domain.ports_rag import Embedder
 from cozmo.infra.rag.embedder import HashingEmbedder
 from cozmo.infra.rag.openai_embedder import OpenAICompatibleEmbedder
@@ -63,3 +65,23 @@ def build_embedder(settings: Settings) -> Embedder:
         )
 
     return HashingEmbedder()
+
+
+def build_vector_store(settings: Settings, workdir: Path):
+    """Pick JSON or Chroma vector backend from Settings.vector_backend."""
+    from pathlib import Path as PathType
+
+    from cozmo.domain.ports_rag import VectorStore
+    from cozmo.infra.rag.paths import chroma_dir, index_path
+    from cozmo.infra.rag.store import JsonVectorStore
+
+    root = workdir if isinstance(workdir, PathType) else PathType(workdir)
+    backend = (getattr(settings, "vector_backend", None) or "json").lower().strip()
+    if backend == "chroma":
+        from cozmo.infra.rag.chroma_store import ChromaVectorStore
+
+        store: VectorStore = ChromaVectorStore.load(
+            index_path(root), persist_dir=chroma_dir(root)
+        )
+        return store
+    return JsonVectorStore.load(index_path(root))

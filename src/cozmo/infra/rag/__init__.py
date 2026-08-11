@@ -2,6 +2,6 @@
 
 from cozmo.infra.rag.embedder import HashingEmbedder
 from cozmo.infra.rag.indexer import RepoIndexer
-from cozmo.infra.rag.store import VectorStore
+from cozmo.infra.rag.store import JsonVectorStore, VectorStore
 
-__all__ = ["HashingEmbedder", "RepoIndexer", "VectorStore"]
+__all__ = ["HashingEmbedder", "RepoIndexer", "JsonVectorStore", "VectorStore"]
