@@ -235,8 +235,6 @@ pip install -e ".[vector]"          # optional Chroma
 cd website && npm install && npm run dev   # marketing site
 ```
 
-Layout lives under `src/cozmo/` (`cli`, `app`, `domain`, `infra`, `search`). See [`docs/FOLDER_LAYOUT.md`](docs/FOLDER_LAYOUT.md) and [`docs/PHASES.md`](docs/PHASES.md).
-
 ---
 
 ## License
