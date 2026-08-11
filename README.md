@@ -1,46 +1,12 @@
-```
-               :@@@@@@@@@@@@@@@@@@@==-
-             @@.                     @@@@%-==
-          @@@=                            @@@
-        :@@.                                 @@@@@
-       @@@+   =+   @@@@@@@@@@@@@@@@+-=+-: .      @
-     *@@@ =@@@@@@%@%#%%##******##%@@@@@%@@@%*-:   @@:+=
-     @@ -@@@@@@@@@@@@@@@@@@@@@@%####%##@%#+=       @@.++
-    @ +@@                *@@@@@@@@@#*++- ::.=*%#%%  @@-=-
-   =@-                         +@@@@%%*:   -+*@%%@* .@:-+
-   %     @@@@@@@@@ @  @@@          @@@@@*@ +#@%@@@@  @@-+
-   @ @-@@@@@@@@@@@@@@@@@@@@@@@  @    @@@@#*%+#*%@#*+  @.+=
-  =  @@%+@@@@@@@@@@@@@@@@@@@@@@@@@    @@#%=*+%@@+@@@@=@.-+=
-  @  @##@@@@@@@@@@@@@@@@@@@@@@@@@@@  . @%#+%#@@+ @#+:@@=-=.
- .#  @#+@@@@@@@@@@@@@@@@@@@@@@@@@@@@ - @%####@@ :@*:@@ =#@%
- @@  @%*@@@        @@@@@@@@@@@@@@@@@ -=@@#%#%@  @@ +@@+%   :
- @%  @@=@@@         @@@@@@@@@@@@@@@@ .=@@%%*@@ @@%:%-.@  %%%
-*@@  @@=@@@         @@        =@@@@@: +@@###@@ @@%@@@%@  @*
- %@  @@=@@@         @@         @@@@@- =@@%##@* @% @*%@@ .@%
-  -  @@=@@@         @@         @@@@@- +@@%##@@ @@%@*%%@  @@
-     @@+@@@@       @@@         @@@@@: +@@%##@@ @@#@@%@@@
-     @@+@@#%%#@@@@@@@@@@@@@@@@@@@@@@  +@@%%#%@*.@@-%@@@@@%
-     @@#@@@@@@@#%@@%%%%%@%@@@@@@@@@@  +@@%%%%#@.=@@#@@# .
-     @@@@@%%%%@%@%%@@%%%@%%@@@@@%%@@ -=@%%#%@+%%  +=+-
-      @@@@@@%@@%@@@@@@@@@@@@%@%%@@@@ =.@@@%%@*#%@%@%+
-          @@@@@@@@@@@@@@@@@@@@@@@@@ .  @%%@@@*#%##
-       =@      @@@@@@@@@@@@@@@@@@    @@@@@@%*=-
-         @@#-           -====      +@@@%@@+-+#%%#%
-          @@@@@@%*+:            -#@@@@@@@@%@#   %%
-          -=#@@@@@@@@@@@@@@@@@@@@@@@@@@@-.   @@@@@
-          %#     @@*  #%@@@@@@@@@@@   @  @@@@@@@@@
-
-  ██████╗ ██████╗ ███████╗███╗   ███╗ ██████╗
- ██╔════╝██╔═══██╗╚══███╔╝████╗ ████║██╔═══██╗
- ██║     ██║   ██║  ███╔╝ ██╔████╔██║██║   ██║
- ██║     ██║   ██║ ███╔╝  ██║╚██╔╝██║██║   ██║
- ╚██████╗╚██████╔╝███████╗██║ ╚═╝ ██║╚██████╔╝
-  ╚═════╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝ ╚═════╝
-```
-
 # Cozmo
 
-CLI coding agent for your repo. One command. Provider setup. Then it indexes and works.
+**Local-first CLI coding agent** for your repository.
+
+Owned ReAct loop, multi-model routing, hybrid RAG, permission-gated tools, and production-style guardrails — without a LangChain dependency.
+
+[![PyPI](https://img.shields.io/pypi/v/cozmo-agent.svg)](https://pypi.org/project/cozmo-agent/)
+[![Python](https://img.shields.io/pypi/pyversions/cozmo-agent.svg)](https://pypi.org/project/cozmo-agent/)
+[![License](https://img.shields.io/pypi/l/cozmo-agent.svg)](./LICENSE)
 
 ```bash
 pipx install cozmo-agent
@@ -48,102 +14,213 @@ cd ~/your-project
 cozmo
 ```
 
-Requires Python 3.11+. Prefer **pipx** (isolated CLI install). On macOS Homebrew Python, plain `pip install` is blocked (PEP 668).
+Package name on PyPI is `cozmo-agent`; the CLI binary is `cozmo`. Requires **Python 3.11+**.
+
+---
+
+## Why Cozmo
+
+| Concern | Approach |
+|---------|----------|
+| Control | You own the agent loop — steps, tools, memory, stop reasons |
+| Cost / quality | Orchestrator + worker models; optional cheap worker for tool calls |
+| Safety | Workspace sandbox; writes and shell off until enabled |
+| Context | Auto compaction + hard budgets (steps, tools, cost, time) |
+| Retrieval | Hybrid BM25 + embeddings, lexical rerank, symbol / graph tools |
+| Ops | Session history + traces under `.cozmo/`; `doctor` / `config` |
+
+---
+
+## Install
+
+**Recommended (pipx):**
 
 ```bash
-brew install pipx && pipx ensurepath
+brew install pipx && pipx ensurepath   # macOS / Homebrew Python
 pipx install cozmo-agent
 ```
 
-Or a venv:
+**Virtualenv:**
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install cozmo-agent
 ```
 
----
-
-## What happens
-
-1. **Install** `cozmo-agent` via pipx (CLI binary is still `cozmo`)
-2. Run `cozmo` in any project
-3. First run: pick provider → paste key → pick model
-4. Cozmo writes config, indexes the repo, opens an interactive session
-
-Type questions at the prompt. Exit with `Ctrl+C` or an empty quit.
+Optional ANN backend:
 
 ```bash
-cozmo                # interactive agent (normal use)
-cozmo setup          # change provider / model / key
+pip install "cozmo-agent[vector]"   # chromadb
+# then: COZMO_VECTOR_BACKEND=chroma
 ```
 
 ---
 
-## Config (where files land)
-
-| Path | What |
-|------|------|
-| `~/.cozmo/config.json` | Global settings + API key (created on first run) |
-| `$XDG_CONFIG_HOME/cozmo/config.json` | Same, if `XDG_CONFIG_HOME` is set |
-| `<repo>/.cozmo/` | Index, traces, code graph |
-| `<repo>/.cozmo/config.json` | Optional project overrides |
+## Quick start
 
 ```bash
-cozmo config         # print exact paths
-cozmo config --show  # print JSON (key masked)
-cozmo doctor         # effective settings
+cozmo                 # interactive agent in cwd
+cozmo setup           # provider, API key, model
+cozmo -m "…"          # one-shot (no REPL)
+cozmo doctor          # effective settings
+```
+
+First launch walks you through provider setup, writes `~/.cozmo/config.json`, indexes the repo into `.cozmo/`, then opens the REPL.
+
+**REPL**
+
+| Command | Action |
+|---------|--------|
+| `/help` | Commands |
+| `/clear` | Reset conversation memory |
+| `/compact` | Summarize older turns now |
+| `/history` | Recent session ids |
+| `/config` | Config path |
+| `/setup` | Re-run wizard |
+| `/exit` | Quit |
+
+Each turn footer reports token usage estimate, `steps`, and `stop` reason (`completed`, `max_iterations`, …).
+
+---
+
+## Architecture
+
+```text
+cli/  →  app/  →  domain/  ←  infra/
+                 ↑
+            search / indexer
+```
+
+```text
+user
+  │
+  ├─► guardrails (compact | kill on budgets)
+  ├─► orchestrator (synthesis / compaction)
+  ├─► worker (ReAct tool loop)
+  │      ├─ read / write / search / git / symbols
+  │      ├─ semantic_search → hybrid → rerank → expand
+  │      └─ run_subtask → scoped subagent → JSON summary
+  └─► .cozmo/history/*.jsonl   (+ traces.jsonl for telemetry)
+```
+
+Layers stay fixed: **view → view-model → domain ← infrastructure**. Domain never imports provider SDKs.
+
+---
+
+## Capabilities
+
+### Multi-model
+
+Set a strong `model` and an optional cheaper `worker_model`:
+
+```bash
+export COZMO_MODEL=claude-sonnet-4-20250514
+export COZMO_WORKER_MODEL=gpt-4o-mini
+```
+
+| Role | Typical use |
+|------|-------------|
+| Orchestrator | Compaction, hard reasoning (when routed) |
+| Worker | Tool loop |
+| Verifier | Optional; omitted unless `verifier_model` is set |
+
+### Guardrails
+
+| Knob | Default | Behavior |
+|------|---------|----------|
+| `max_agent_steps` | 8 | Hard stop after N LLM steps |
+| `max_messages_before_compact` | 30 | Soft: summarize older turns |
+| `context_token_budget` | 24000 | Soft: compact at ~70% |
+| `max_tool_calls_per_session` | 40 | Hard stop |
+| `max_cost_usd` | unset | Optional hard stop |
+| `session_timeout_s` | 600 | Optional hard stop |
+| `max_subagent_depth` / `steps` | 1 / 4 | Nested agent caps |
+
+### Retrieval
+
+1. Chunk files (~600 chars, line-aware) → embed → vector store  
+2. Query: hybrid BM25 + vector recall (~50) → lexical rerank (~10) → ± line context  
+3. Code intel: `symbol_search`, `find_references`, `get_codebase_graph`
+
+Default store is JSON under `.cozmo/index.json`. Chroma is optional (`vector_backend=chroma`).
+
+### Subagents
+
+The worker may call `run_subtask` with a goal. A child agent runs with read/search tools only, tighter step limits, and returns a **JSON summary** — not a full transcript — so the parent context stays small.
+
+### Permissions
+
+| Setting | Default |
+|---------|---------|
+| `allow_write` | `true` |
+| `allow_shell` | `false` |
+
+Tools cannot leave the workspace root (`WorkspaceGuard`).
+
+---
+
+## Configuration
+
+**Precedence (highest wins):** CLI flags → `COZMO_*` env → cwd `.env` → `<repo>/.cozmo/config.json` → `~/.cozmo/config.json` → defaults.
+
+| Path | Contents |
+|------|----------|
+| `~/.cozmo/config.json` | Global provider, model, key, budgets |
+| `$XDG_CONFIG_HOME/cozmo/config.json` | Alternate global (if XDG set) |
+| `<repo>/.cozmo/config.json` | Project overrides |
+| `<repo>/.cozmo/index.json` | Vector index (or `chroma/`) |
+| `<repo>/.cozmo/history/` | Session event JSONL |
+| `<repo>/.cozmo/traces.jsonl` | Low-level LLM/tool telemetry |
+
+```bash
+cozmo config
+cozmo config --show    # secrets masked
 ```
 
 <details>
-<summary>Example <code>~/.cozmo/config.json</code></summary>
+<summary>Example config</summary>
 
 ```json
 {
   "provider": "openai",
   "model": "gpt-4o-mini",
+  "worker_model": "gpt-4o-mini",
   "api_key": "sk-...",
   "allow_write": true,
   "allow_shell": false,
-  "max_agent_steps": 8
+  "max_agent_steps": 8,
+  "max_messages_before_compact": 30,
+  "history_enabled": true,
+  "vector_backend": "json",
+  "trace_enabled": true
 }
 ```
 
-Load order: CLI flags → `COZMO_*` env → cwd `.env` → project config → global config → defaults
-
 </details>
 
+**Providers:** `openai` · `anthropic` · `openrouter` · `ollama` · `stub` (tests) · any OpenAI-compatible `base_url`.
+
 ---
 
-## Commands
+## CLI reference
 
-| | |
-|--|--|
+| Command | Description |
+|---------|-------------|
 | `cozmo` | Interactive agent (default) |
-| `cozmo setup` | Interactive reconfigure |
-| `cozmo config` | Config paths |
+| `cozmo agent` | Same as default |
+| `cozmo chat` | LLM only (no tools) |
+| `cozmo setup` | Interactive configure |
+| `cozmo config` | Paths / show JSON |
 | `cozmo index` | Force re-index |
-| `cozmo chat` | LLM only, no tools |
-| `cozmo doctor` | Diagnose settings |
-| `cozmo -m "…"` | Optional one-shot (no REPL) |
+| `cozmo doctor` | Diagnose effective settings |
+| `cozmo eval` | Golden cases against fixture / live |
+| `cozmo --version` | Print version |
+
+Common flags: `-w / --workdir`, `-p / --provider`, `--model`, `-m / --message`, `--no-index`.
 
 ---
 
-## Stack (short)
-
-- Owned ReAct loop (no LangChain)
-- Tools: read/write, search, semantic search, git, symbols, graphs (shell gated)
-- Hybrid RAG: BM25 + embeddings
-- Providers: OpenAI, OpenRouter, Ollama, any OpenAI-compatible API
-
-```
-cozmo → config → index → AgentRunner
-              LLM ↔ tools ↔ your files
-```
-
----
-
-## Dev
+## Development
 
 ```bash
 git clone https://github.com/ShashwatXD/cozmo.git
@@ -153,8 +230,15 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
+```bash
+pip install -e ".[vector]"          # optional Chroma
+cd website && npm install && npm run dev   # marketing site
+```
+
+Layout lives under `src/cozmo/` (`cli`, `app`, `domain`, `infra`, `search`). See [`docs/FOLDER_LAYOUT.md`](docs/FOLDER_LAYOUT.md) and [`docs/PHASES.md`](docs/PHASES.md).
+
 ---
 
-**Fun fact:** Named after [Anki Cozmo](https://www.digitaldreamlabs.com/pages/cozmo), the robot pet I always wanted. Learning project, not affiliated. PyPI package is `cozmo-agent`.
+## License
 
-MIT
+MIT. Named after [Anki Cozmo](https://www.digitaldreamlabs.com/pages/cozmo) — unaffiliated fan project.
