@@ -92,7 +92,6 @@ def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
         "history_max_sessions": settings.history_max_sessions,
         "history_max_events_per_session": settings.history_max_events_per_session,
         "trace_enabled": settings.trace_enabled,
-        "log_level": settings.log_level,
     }
 
 def _ensure_config() -> None:

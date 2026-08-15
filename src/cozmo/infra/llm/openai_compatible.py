@@ -10,6 +10,9 @@ from openai import OpenAI
 from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.tools import ToolCall, ToolSpec
+from cozmo.infra.llm.curl_log import log_llm_curl
+
+_DEFAULT_BASE = "https://api.openai.com/v1"
 
 def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
@@ -56,12 +59,23 @@ class OpenAICompatibleClient:
         max_tokens: int = 2048,
     ) -> None:
         self._model = model
+        self._api_key = api_key
+        self._base_url = (base_url or _DEFAULT_BASE).rstrip("/")
         self._max_tokens = max_tokens
         self._client = OpenAI(
             api_key=api_key,
             base_url=base_url,
             timeout=timeout_s,
         )
+
+    def _request_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+
+    def _chat_completions_url(self) -> str:
+        return f"{self._base_url}/chat/completions"
 
     def complete(
         self,
@@ -83,6 +97,11 @@ class OpenAICompatibleClient:
             kwargs["tools"] = [t.to_openai() for t in tools]
             kwargs["tool_choice"] = "auto"
 
+        log_llm_curl(
+            url=self._chat_completions_url(),
+            headers=self._request_headers(),
+            body=kwargs,
+        )
         resp = self._client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
         usage = Usage()
@@ -128,8 +147,19 @@ class OpenAICompatibleClient:
                 **kwargs,
                 stream_options={"include_usage": True},
             )
+            body: dict[str, Any] = {
+                **kwargs,
+                "stream_options": {"include_usage": True},
+            }
         except TypeError:
             stream = self._client.chat.completions.create(**kwargs)
+            body = kwargs
+
+        log_llm_curl(
+            url=self._chat_completions_url(),
+            headers=self._request_headers(),
+            body=body,
+        )
 
         for event in stream:
             if not event.choices:

@@ -11,6 +11,7 @@ import httpx
 from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.tools import ToolCall, ToolSpec
+from cozmo.infra.llm.curl_log import log_llm_curl
 
 _API = "https://api.anthropic.com/v1/messages"
 _VERSION = "2023-06-01"
@@ -121,8 +122,10 @@ class AnthropicClient:
         if json_mode and system:
             body["system"] = system + "\n\nRespond with valid JSON only."
 
+        headers = self._headers()
+        log_llm_curl(url=_API, headers=headers, body=body)
         with httpx.Client(timeout=self._timeout) as client:
-            resp = client.post(_API, headers=self._headers(), json=body)
+            resp = client.post(_API, headers=headers, json=body)
         if resp.status_code >= 400:
             raise RuntimeError(f"Anthropic error {resp.status_code}: {resp.text[:400]}")
         data = resp.json()

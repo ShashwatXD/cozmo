@@ -7,14 +7,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from cozmo.infra.config.paths import user_config_dir, user_config_path
+from cozmo.infra.config.paths import user_config_path
 
 USER_CONFIG_KEYS = frozenset(
     {
         "provider",
         "model",
         "worker_model",
-        "verifier_model",
         "workdir",
         "api_key",
         "base_url",
@@ -41,7 +40,6 @@ USER_CONFIG_KEYS = frozenset(
         "history_max_sessions",
         "history_max_events_per_session",
         "trace_enabled",
-        "log_level",
     }
 )
 
@@ -101,7 +99,6 @@ def example_config() -> dict[str, Any]:
         "max_agent_steps": 8,
         "memory_max_messages": 40,
         "trace_enabled": True,
-        "log_level": "INFO",
     }
 
 def save_user_config(data: dict[str, Any], path: Path | None = None) -> Path:
@@ -128,12 +125,3 @@ def save_user_config(data: dict[str, Any], path: Path | None = None) -> Path:
     except OSError:
         pass
     return cfg_path
-
-def ensure_user_config_dir() -> Path:
-    d = user_config_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(d, 0o700)
-    except OSError:
-        pass
-    return d

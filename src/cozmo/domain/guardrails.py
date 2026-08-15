@@ -13,8 +13,6 @@ class StopReason(str, Enum):
     MAX_COST = "max_cost"
     SESSION_TIMEOUT = "session_timeout"
     MAX_TOOL_CALLS = "max_tool_calls"
-    CONTEXT_OVERFLOW = "context_overflow"
-    USER_CLEAR = "user_clear"
     SUBAGENT_DEPTH = "subagent_depth"
 
 

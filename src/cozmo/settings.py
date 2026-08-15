@@ -40,7 +40,6 @@ class Settings(BaseSettings):
     provider: str = "stub"
     model: str = "stub-model"
     worker_model: str | None = None
-    verifier_model: str | None = None
     workdir: Path = Field(default=Path("."))
     api_key: str | None = Field(
         default=None,
@@ -74,7 +73,6 @@ class Settings(BaseSettings):
     history_max_sessions: int = 50
     history_max_events_per_session: int = 2000
     trace_enabled: bool = True
-    log_level: str = "INFO"
 
     @classmethod
     def settings_customise_sources(
