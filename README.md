@@ -72,14 +72,18 @@ First launch walks you through provider setup, writes `~/.cozmo/config.json`, in
 | Command | Action |
 |---------|--------|
 | `/help` | Commands |
+| `/ask` `/plan` `/agent` | Modes (explain / propose / edit) |
+| `/sessions` | List sessions (id, time, model, preview) |
+| `/continue [id]` | Resume session (latest if no id) |
+| `/export md\|json` | Export current or given session |
 | `/clear` | Reset conversation memory |
 | `/compact` | Summarize older turns now |
-| `/history` | Recent session ids |
+| `/history` | Alias of `/sessions` |
 | `/config` | Config path |
 | `/setup` | Re-run wizard |
 | `/exit` | Quit |
 
-Each turn footer reports token usage estimate, `steps`, and `stop` reason (`completed`, `max_iterations`, …).
+Also: `cozmo --ask`, `cozmo --plan`. Each turn footer reports API tokens, `ctx≈N/budget (%)`, `steps`, and `stop` reason.
 
 ---
 
@@ -122,7 +126,6 @@ export COZMO_WORKER_MODEL=gpt-4o-mini
 |------|-------------|
 | Orchestrator | Compaction, hard reasoning (when routed) |
 | Worker | Tool loop |
-| Verifier | Optional; omitted unless `verifier_model` is set |
 
 ### Guardrails
 

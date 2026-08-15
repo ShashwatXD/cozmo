@@ -31,6 +31,17 @@ class JsonVectorStore:
     def clear(self) -> None:
         self._items.clear()
 
+    def drop_paths(self, paths: set[str]) -> int:
+        """Remove all chunks whose path is in *paths*. Returns removed count."""
+        if not paths:
+            return 0
+        before = len(self._items)
+        self._items = [(c, e) for c, e in self._items if c.path not in paths]
+        return before - len(self._items)
+
+    def paths(self) -> set[str]:
+        return {c.path for c, _ in self._items}
+
     def add(self, chunk: Chunk, embedding: list[float]) -> None:
         self._items.append((chunk, embedding))
 
@@ -72,5 +83,5 @@ class JsonVectorStore:
         return store
 
 
-# Backward-compatible alias — prefer JsonVectorStore or domain VectorStore Protocol.
+# Prefer JsonVectorStore or the domain VectorStore Protocol.
 VectorStore = JsonVectorStore

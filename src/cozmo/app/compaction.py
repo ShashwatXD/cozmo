@@ -9,16 +9,23 @@ from cozmo.domain.ports import LLMClient
 from cozmo.prompts.loader import load_system_prompt
 
 
-def _history_est_tokens(memory: ConversationMemory) -> int:
+def estimate_context_tokens(
+    memory: ConversationMemory,
+    *,
+    system_prompt: str = "",
+) -> int:
+    """Rough context size for budgets and the REPL meter (char/4)."""
     parts = [m.content for m in memory.snapshot()]
     if memory.summary:
         parts.append(memory.summary)
+    if system_prompt:
+        parts.append(system_prompt)
     return estimate_tokens("\n".join(parts))
 
 
 def needs_compaction(memory: ConversationMemory, policy: AgentPolicy) -> bool:
     return policy.should_compact_messages(len(memory)) or policy.should_compact_tokens(
-        _history_est_tokens(memory)
+        estimate_context_tokens(memory)
     )
 
 

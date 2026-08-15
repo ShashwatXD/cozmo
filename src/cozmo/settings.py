@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     max_subagent_depth: int = 1
     max_subagent_steps: int = 4
     shell_timeout_s: float = 60.0
+    max_tool_result_chars: int = 24_000
     embedder: str = "auto"
     embedding_model: str = "text-embedding-3-small"
     vector_backend: str = "json"

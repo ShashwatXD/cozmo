@@ -66,3 +66,5 @@ def test_register_subagent_tool() -> None:
     assert not result.is_error
     payload = json.loads(result.content)
     assert "summary" in payload
+    assert "paths" in payload
+    assert "claims" in payload

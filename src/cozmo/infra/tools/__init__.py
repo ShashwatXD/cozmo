@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -10,26 +9,35 @@ from typing import Any
 from cozmo.domain.tools import ToolSpec
 from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolRegistry
-
-
-def _line_matches(query: str, line: str) -> bool:
-    """Exact substring, then whitespace-insensitive (so ``a-b`` hits ``a - b``)."""
-    if not query:
-        return False
-    if query in line:
-        return True
-    compact_q = re.sub(r"\s+", "", query)
-    if not compact_q:
-        return False
-    return compact_q in re.sub(r"\s+", "", line)
+from cozmo.infra.tools.rg_search import search_repo as run_search_repo
 
 READ_SPEC = ToolSpec(
     name="read_file",
-    description="Read a UTF-8 text file under the workspace.",
+    description=(
+        "Read a UTF-8 text file under the workspace. Prefer start_line/end_line "
+        "or around_line after search hits so you do not load entire large files."
+    ),
     parameters={
         "type": "object",
         "properties": {
             "path": {"type": "string", "description": "Relative path from workdir"},
+            "start_line": {
+                "type": "integer",
+                "description": "Optional 1-based start line (inclusive)",
+            },
+            "end_line": {
+                "type": "integer",
+                "description": "Optional 1-based end line (inclusive)",
+            },
+            "around_line": {
+                "type": "integer",
+                "description": "Optional center line; uses window lines each side",
+            },
+            "window": {
+                "type": "integer",
+                "description": "Lines before/after around_line (default 80)",
+                "default": 80,
+            },
         },
         "required": ["path"],
     },
@@ -51,9 +59,9 @@ WRITE_SPEC = ToolSpec(
 SEARCH_SPEC = ToolSpec(
     name="search_repo",
     description=(
-        "Search for text in the workspace. Matches exact substrings and also "
-        "ignores whitespace differences (e.g. query 'a-b' finds 'a - b'). "
-        "Use for snippets, operators, and keywords; prefer semantic_search for meaning."
+        "Exact / keyword search over the workspace (ripgrep when available). "
+        "Returns path:line:snippet. Use for identifiers, errors, and literals. "
+        "Prefer semantic_search for vague 'how does X work' questions."
     ),
     parameters={
         "type": "object",
@@ -61,8 +69,13 @@ SEARCH_SPEC = ToolSpec(
             "query": {"type": "string"},
             "glob": {
                 "type": "string",
-                "description": "Optional suffix filter, e.g. .py",
+                "description": "Optional glob or suffix filter, e.g. *.py or .py",
                 "default": "",
+            },
+            "max_hits": {
+                "type": "integer",
+                "description": "Max hits to return (default 40)",
+                "default": 40,
             },
         },
         "required": ["query"],
@@ -103,7 +116,7 @@ SEMANTIC_SPEC = ToolSpec(
     description=(
         "Hybrid retrieval over the indexed workspace: BM25+vector recall, "
         "lexical rerank, then surrounding context. Prefer for meaning / fuzzy "
-        "snippets; use search_repo for exact text. Requires `cozmo index` first."
+        "questions; use search_repo for exact identifiers. Requires `cozmo index`."
     ),
     parameters={
         "type": "object",
@@ -114,6 +127,60 @@ SEMANTIC_SPEC = ToolSpec(
         "required": ["query"],
     },
 )
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return int(value.strip())
+    return None
+
+
+def _read_file_ranged(path: Path, args: dict[str, Any], display_path: str) -> str:
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    total = len(lines)
+    if total == 0:
+        return f"{display_path}: empty file"
+
+    around = _as_int(args.get("around_line"))
+    start = _as_int(args.get("start_line"))
+    end = _as_int(args.get("end_line"))
+    window = _as_int(args.get("window")) or 80
+    window = max(1, min(window, 500))
+
+    if around is not None:
+        center = max(1, min(around, total))
+        start = max(1, center - window)
+        end = min(total, center + window)
+    elif start is not None or end is not None:
+        start = max(1, start or 1)
+        end = min(total, end or total)
+        if end < start:
+            start, end = end, start
+    else:
+        # Full file for small sources; hard cap for large ones.
+        max_full_chars = 100_000
+        if len(text) <= max_full_chars:
+            return text
+        return (
+            text[:max_full_chars]
+            + f"\n...[truncated; file has {total} lines / {len(text)} chars; "
+            "pass start_line/end_line or around_line]"
+        )
+
+    start = max(1, min(start, total))
+    end = max(1, min(end, total))
+    body = "\n".join(lines[start - 1 : end])
+    return f"{display_path}:{start}-{end} (of {total})\n{body}"
+
 
 def build_default_registry(
     guard: WorkspaceGuard,
@@ -127,14 +194,11 @@ def build_default_registry(
     reg = ToolRegistry()
 
     def read_file(args: dict[str, Any]) -> str:
-        path = guard.resolve(args["path"])
+        rel = args["path"]
+        path = guard.resolve(rel)
         if not path.is_file():
-            raise FileNotFoundError(f"Not a file: {args['path']}")
-        text = path.read_text(encoding="utf-8")
-        # Cap huge files so we don't blow context
-        if len(text) > 50_000:
-            return text[:50_000] + "\n...[truncated]"
-        return text
+            raise FileNotFoundError(f"Not a file: {rel}")
+        return _read_file_ranged(path, args, str(rel))
 
     def write_file(args: dict[str, Any]) -> str:
         guard.require_write()
@@ -144,29 +208,13 @@ def build_default_registry(
         return f"Wrote {len(args['content'])} chars to {args['path']}"
 
     def search_repo(args: dict[str, Any]) -> str:
-        query = args["query"]
-        suffix = args.get("glob") or ""
-        hits: list[str] = []
-        for file in guard.workdir.rglob("*"):
-            if not file.is_file():
-                continue
-            if suffix and not file.name.endswith(suffix):
-                continue
-            # skip venv / git junk
-            parts = set(file.parts)
-            if ".venv" in parts or "node_modules" in parts or ".git" in parts:
-                continue
-            try:
-                text = file.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
-            for i, line in enumerate(text.splitlines(), start=1):
-                if _line_matches(query, line):
-                    rel = file.relative_to(guard.workdir)
-                    hits.append(f"{rel}:{i}:{line.strip()[:200]}")
-                    if len(hits) >= 40:
-                        return "\n".join(hits)
-        return "\n".join(hits) if hits else "No matches."
+        query = str(args.get("query") or "")
+        glob = str(args.get("glob") or "")
+        max_hits = _as_int(args.get("max_hits")) or 40
+        max_hits = max(1, min(max_hits, 200))
+        return run_search_repo(
+            guard.workdir, query, glob=glob, max_hits=max_hits
+        )
 
     def run_shell(args: dict[str, Any]) -> str:
         guard.require_shell()
@@ -180,7 +228,7 @@ def build_default_registry(
             timeout=shell_timeout_s,
         )
         out = (proc.stdout or "") + (proc.stderr or "")
-        return f"exit={proc.returncode}\n{out[:20_000]}"
+        return f"exit={proc.returncode}\n{out}"
 
     def git_status(_: dict[str, Any]) -> str:
         return _git(guard.workdir, ["status", "--short"])
@@ -188,7 +236,6 @@ def build_default_registry(
     def git_diff(args: dict[str, Any]) -> str:
         cmd = ["diff"]
         if args.get("path"):
-            # still sandbox the path
             guard.resolve(args["path"])
             cmd.append(args["path"])
         return _git(guard.workdir, cmd)
@@ -214,7 +261,7 @@ def build_default_registry(
             return "No semantic hits."
         lines: list[str] = []
         for h in hits:
-            preview = h.text[:800].replace("\n", "\n")
+            preview = h.text[:800]
             lines.append(
                 f"score={h.score:.3f} {h.path}:{h.start_line}-{h.end_line}\n{preview}"
             )
@@ -229,6 +276,7 @@ def build_default_registry(
     reg.register(GIT_DIFF_SPEC, git_diff)
 
     return reg
+
 
 def _git(cwd: Path, args: list[str]) -> str:
     proc = subprocess.run(

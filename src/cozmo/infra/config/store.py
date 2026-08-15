@@ -33,6 +33,7 @@ USER_CONFIG_KEYS = frozenset(
         "max_subagent_depth",
         "max_subagent_steps",
         "shell_timeout_s",
+        "max_tool_result_chars",
         "embedder",
         "embedding_model",
         "vector_backend",

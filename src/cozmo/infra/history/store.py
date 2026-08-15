@@ -70,10 +70,19 @@ class JsonlEventStore:
                 row = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if isinstance(row, dict):
+            if isinstance(row, dict) and row.get("id"):
+                sid = str(row["id"])
+                if not session_events_path(self._workdir, sid).is_file():
+                    continue
                 rows.append(row)
         rows.reverse()
         return rows[:limit]
+
+    def most_recent_session_id(self) -> str | None:
+        rows = self.list_sessions(limit=1)
+        if not rows:
+            return None
+        return str(rows[0].get("id") or "") or None
 
     def _index_session(self, event: SessionEvent) -> None:
         path = sessions_index_path(self._workdir)

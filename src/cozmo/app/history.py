@@ -50,7 +50,31 @@ class SessionHistory:
         return self.emit(EventKind.SUBAGENT, goal=goal[:1000], **data)
 
     def list_recent_sessions(self, *, limit: int = 10) -> list[dict]:
-        return self._store.list_sessions(limit=limit)
+        from cozmo.app.session_resume import session_preview
 
-    def list_events(self) -> list[SessionEvent]:
-        return self._store.list_events(self.session_id)
+        rows = self._store.list_sessions(limit=limit)
+        out: list[dict] = []
+        for row in rows:
+            enriched = dict(row)
+            if not enriched.get("preview"):
+                events = self._store.list_events(str(row.get("id") or ""))
+                enriched["preview"] = session_preview(events)
+            out.append(enriched)
+        return out
+
+    def list_events(self, session_id: str | None = None) -> list[SessionEvent]:
+        sid = session_id or self.session_id
+        return self._store.list_events(sid)
+
+    def attach(self, session_id: str) -> None:
+        """Continue writing events into an existing session file."""
+        self.session_id = session_id
+
+    def most_recent_session_id(self) -> str | None:
+        fn = getattr(self._store, "most_recent_session_id", None)
+        if callable(fn):
+            return fn()
+        rows = self._store.list_sessions(limit=1)
+        if not rows:
+            return None
+        return str(rows[0].get("id") or "") or None

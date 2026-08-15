@@ -31,7 +31,7 @@ def test_index_and_search(tmp_path: Path) -> None:
     )
     embedder = StubEmbedder()
     store = VectorStore()
-    n = RepoIndexer(embedder, store).index_dir(tmp_path)
+    n = RepoIndexer(embedder, store).index_dir(tmp_path).chunks
     assert n >= 1
     hits = store.search(embedder.embed("off-by-one add function"), top_k=3)
     assert hits

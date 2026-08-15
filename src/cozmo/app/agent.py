@@ -9,11 +9,13 @@ from dataclasses import dataclass
 from cozmo.app.compaction import compact_memory, needs_compaction
 from cozmo.app.history import SessionHistory
 from cozmo.app.model_router import ModelRouter
+from cozmo.app.permissions import PermissionGate
 from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.cost import estimate_cost_usd
 from cozmo.domain.guardrails import AgentPolicy, StopReason
 from cozmo.domain.memory import ConversationMemory
 from cozmo.domain.messages import Message, Role
+from cozmo.domain.mode import MUTATING_TOOLS, READ_ONLY_MODES, AgentMode, prompt_name_for_mode
 from cozmo.domain.ports import LLMClient
 from cozmo.domain.tools import ToolResult
 from cozmo.infra.telemetry.tracer import Tracer
@@ -23,7 +25,7 @@ from cozmo.prompts.loader import load_system_prompt
 
 @dataclass(frozen=True)
 class AgentEvent:
-    kind: str  # thinking | assistant | tool_call | tool_result | compact | done | stopped
+    kind: str  # thinking | assistant | tool_call | tool_result | permission | compact | done | stopped
     text: str = ""
     tool_name: str = ""
     stop_reason: str = ""
@@ -59,6 +61,8 @@ class AgentRunner:
         max_steps: int | None = None,
         model_name: str = "stub-model",
         depth: int = 0,
+        permission_gate: PermissionGate | None = None,
+        mode: AgentMode = AgentMode.AGENT,
     ) -> None:
         if models is None:
             if llm is None:
@@ -81,7 +85,13 @@ class AgentRunner:
             from dataclasses import replace
 
             self._policy = replace(self._policy, max_agent_steps=max_steps)
-        self._system_prompt = system_prompt or load_system_prompt("agent")
+        self._mode = mode
+        self._permission_gate = permission_gate
+        if self._permission_gate is not None:
+            self._permission_gate.set_mode(mode)
+        self._system_prompt = system_prompt or load_system_prompt(
+            prompt_name_for_mode(mode)
+        )
         self._temperature = temperature
         self._model_name = model_name
         self._depth = depth
@@ -97,6 +107,21 @@ class AgentRunner:
     @property
     def policy(self) -> AgentPolicy:
         return self._policy
+
+    @property
+    def mode(self) -> AgentMode:
+        return self._mode
+
+    @property
+    def system_prompt(self) -> str:
+        return self._system_prompt
+
+    def set_mode(self, mode: AgentMode) -> None:
+        """Switch ask/plan/agent (prompt + tool visibility + permission gate)."""
+        self._mode = mode
+        self._system_prompt = load_system_prompt(prompt_name_for_mode(mode))
+        if self._permission_gate is not None:
+            self._permission_gate.set_mode(mode)
 
     def run(self, user_text: str) -> AgentResult:
         for _ in self.run_events(user_text):
@@ -125,7 +150,7 @@ class AgentRunner:
             *self._memory.for_prompt(self._system_prompt),
             Message(role=Role.USER, content=user_text),
         ]
-        tools = self._registry.specs()
+        tools = self._tool_specs_for_mode()
         total_usage = Usage()
         self.last_result = None
         max_steps = self._policy.max_agent_steps
@@ -211,7 +236,15 @@ class AgentRunner:
                     tool_name=call.name,
                 )
                 t1 = time.perf_counter()
-                tool_result: ToolResult = self._executor.execute(call)
+                tool_result = self._execute_gated(call)
+                if tool_result.is_error and tool_result.content.startswith(
+                    "Permission denied"
+                ):
+                    yield AgentEvent(
+                        kind="permission",
+                        text=tool_result.content,
+                        tool_name=call.name,
+                    )
                 if self._tracer:
                     self._tracer.emit(
                         "tool",
@@ -269,6 +302,19 @@ class AgentRunner:
             stop_reason=StopReason.MAX_ITERATIONS.value,
         )
         yield AgentEvent(kind="done", text=text)
+
+    def _tool_specs_for_mode(self) -> list:
+        specs = self._registry.specs()
+        if self._mode in READ_ONLY_MODES:
+            return [s for s in specs if s.name not in MUTATING_TOOLS]
+        return specs
+
+    def _execute_gated(self, call) -> ToolResult:
+        if self._permission_gate is not None and call.name in MUTATING_TOOLS:
+            decision = self._permission_gate.decide(call)
+            if not decision.allowed:
+                return self._permission_gate.deny_result(call, decision)
+        return self._executor.execute(call)
 
     def _check_hard_limits(self) -> StopReason | None:
         elapsed = time.monotonic() - self._session_started

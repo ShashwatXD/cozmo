@@ -1,8 +1,9 @@
-"""Nested subagent runner — scoped tools + tighter AgentPolicy."""
+"""Nested subagent runner: scoped tools + compact evidence packs."""
 
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from cozmo.app.agent import AgentRunner
@@ -17,9 +18,8 @@ from cozmo.prompts.loader import load_system_prompt
 SUBTASK_SPEC = ToolSpec(
     name="run_subtask",
     description=(
-        "Spawn a scoped subagent (read/search tools only) to explore or "
-        "answer a sub-goal. Returns JSON with summary — use for investigation "
-        "without polluting the main thread."
+        "Spawn a scoped subagent (read/search only) for a sub-goal. "
+        "Returns a compact JSON evidence pack: paths, claims, open_questions, summary."
     ),
     parameters={
         "type": "object",
@@ -34,11 +34,63 @@ SUBTASK_SPEC = ToolSpec(
     },
 )
 
+_JSON_OBJ = re.compile(r"\{[\s\S]*\}")
+
+
+def _evidence_pack(final_text: str, *, steps: int, stop_reason: str, tokens: int) -> dict[str, Any]:
+    """Parse subagent output into a bounded evidence pack."""
+    text = (final_text or "").strip()
+    data: dict[str, Any] | None = None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        m = _JSON_OBJ.search(text)
+        if m:
+            try:
+                data = json.loads(m.group(0))
+            except json.JSONDecodeError:
+                data = None
+    if not isinstance(data, dict):
+        data = {
+            "paths": [],
+            "claims": [],
+            "open_questions": [],
+            "summary": text[:1500] or "(empty)",
+        }
+
+    def _str_list(key: str, *, limit: int) -> list[str]:
+        raw = data.get(key) if isinstance(data, dict) else None
+        if not isinstance(raw, list):
+            return []
+        out: list[str] = []
+        for item in raw:
+            s = str(item).strip()
+            if s:
+                out.append(s[:400])
+            if len(out) >= limit:
+                break
+        return out
+
+    summary = str(data.get("summary") or "").strip()[:1500]
+    if not summary and isinstance(data.get("claims"), list) and data["claims"]:
+        summary = str(data["claims"][0])[:1500]
+
+    return {
+        "ok": stop_reason == StopReason.COMPLETED.value,
+        "paths": _str_list("paths", limit=20),
+        "claims": _str_list("claims", limit=30),
+        "open_questions": _str_list("open_questions", limit=15),
+        "summary": summary or "(no summary)",
+        "steps": steps,
+        "stop_reason": stop_reason,
+        "tokens": tokens,
+    }
+
 
 class SubAgentService:
     """
     Spawns a nested AgentRunner with worker model + child policy.
-    Registered as a tool from the app/CLI layer (not from infra → app).
+    Registered as a tool from the app/CLI layer (not from infra -> app).
     """
 
     def __init__(
@@ -52,6 +104,7 @@ class SubAgentService:
         model_name: str = "stub-model",
         depth: int = 0,
         allowed_tools: frozenset[str] | None = None,
+        max_tool_result_chars: int = 24_000,
     ) -> None:
         self._models = models
         self._parent_registry = parent_registry
@@ -60,6 +113,7 @@ class SubAgentService:
         self._temperature = temperature
         self._model_name = model_name
         self._depth = depth
+        self._max_tool_result_chars = max_tool_result_chars
         self._allowed = allowed_tools or frozenset(
             {
                 "read_file",
@@ -76,11 +130,16 @@ class SubAgentService:
             return json.dumps(
                 {
                     "ok": False,
-                    "error": (
+                    "paths": [],
+                    "claims": [],
+                    "open_questions": [],
+                    "summary": (
                         f"subagent depth exceeded "
                         f"({self._policy.max_subagent_depth})"
                     ),
                     "stop_reason": depth_stop.value,
+                    "steps": 0,
+                    "tokens": 0,
                 }
             )
 
@@ -102,7 +161,9 @@ class SubAgentService:
         runner = AgentRunner(
             models=self._models,
             registry=child_registry,
-            executor=ToolExecutor(child_registry),
+            executor=ToolExecutor(
+                child_registry, max_chars=self._max_tool_result_chars
+            ),
             memory=ConversationMemory(max_messages=child_policy.memory_max_messages),
             history=None,
             policy=child_policy,
@@ -115,14 +176,13 @@ class SubAgentService:
             self._history.subagent(goal, depth=self._depth + 1)
 
         result = runner.run(goal)
-        payload: dict[str, Any] = {
-            "ok": result.stop_reason == StopReason.COMPLETED,
-            "summary": result.final_text[:4000],
-            "steps": result.steps,
-            "stop_reason": result.stop_reason.value,
-            "tokens": result.usage.total_tokens,
-        }
-        return json.dumps(payload)
+        pack = _evidence_pack(
+            result.final_text,
+            steps=result.steps,
+            stop_reason=result.stop_reason.value,
+            tokens=result.usage.total_tokens,
+        )
+        return json.dumps(pack)
 
     def handler(self, args: dict[str, Any]) -> str:
         goal = str(args.get("goal") or "").strip()
@@ -140,5 +200,5 @@ class SubAgentService:
 
 
 def register_subagent_tool(registry: ToolRegistry, service: SubAgentService) -> None:
-    """Wire run_subtask from app/CLI — keeps infra free of app imports."""
+    """Wire run_subtask from app/CLI; keeps infra free of app imports."""
     registry.register(SUBTASK_SPEC, service.handler)

@@ -12,14 +12,18 @@ import typer
 from cozmo import __version__
 from cozmo.app.agent import AgentRunner
 from cozmo.app.chat import ChatUseCase
+from cozmo.app.context_meter import context_meter
 from cozmo.app.eval_runner import run_eval
 from cozmo.app.history import SessionHistory
 from cozmo.app.model_router import build_llm_bundle
+from cozmo.app.permissions import PermissionChoice, PermissionGate
 from cozmo.app.subagent import SubAgentService, register_subagent_tool
 from cozmo.domain.completion import Usage
 from cozmo.domain.cost import format_cost_line
 from cozmo.domain.guardrails import AgentPolicy
 from cozmo.domain.memory import ConversationMemory
+from cozmo.domain.mode import AgentMode
+from cozmo.domain.tools import ToolCall
 from cozmo.infra.config.paths import (
     project_config_path,
     user_config_dir,
@@ -38,6 +42,7 @@ from cozmo.infra.rag.paths import index_path
 from cozmo.infra.rag.store import JsonVectorStore
 from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools import build_default_registry
+from cozmo.infra.tools.permission_store import PermissionStore
 from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolExecutor
 from cozmo.settings import Settings, load_settings
@@ -85,6 +90,7 @@ def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
         "max_subagent_depth": settings.max_subagent_depth,
         "max_subagent_steps": settings.max_subagent_steps,
         "shell_timeout_s": settings.shell_timeout_s,
+        "max_tool_result_chars": settings.max_tool_result_chars,
         "embedder": settings.embedder,
         "embedding_model": settings.embedding_model,
         "vector_backend": settings.vector_backend,
@@ -109,11 +115,23 @@ def _ensure_config() -> None:
     run_setup(non_interactive=False)
 
 def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -> None:
-    embedder = build_embedder(settings)
-    store = JsonVectorStore()
-    n = RepoIndexer(embedder, store).index_dir(root_dir)
+    try:
+        embedder = build_embedder(settings)
+    except Exception as exc:  # noqa: BLE001
+        typer.secho(
+            f"indexing skipped: cannot build embedder ({exc})",
+            fg="yellow",
+        )
+        return
+
+    existing = (
+        JsonVectorStore.load(index_path(root_dir))
+        if index_path(root_dir).is_file()
+        else JsonVectorStore()
+    )
+    store = existing
+    report = RepoIndexer(embedder, store).index_dir(root_dir, incremental=True)
     out = index_path(root_dir)
-    # Persist via selected backend (chroma also writes JSON mirror).
     backend = build_vector_store(settings, root_dir)
     if settings.vector_backend == "chroma":
         backend.clear()
@@ -122,8 +140,31 @@ def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -
         backend.save(out)
     else:
         store.save(out)
+
+    if report.errors and not quiet:
+        for err in report.errors[:5]:
+            typer.secho(f"  index warn: {err}", fg="yellow")
+        if len(report.errors) > 5:
+            typer.secho(
+                f"  index warn: {len(report.errors) - 5} more errors",
+                fg="yellow",
+            )
     if not quiet:
-        typer.secho(f"indexed {n} chunks → {out}", fg="bright_black")
+        extra = ""
+        if report.partial:
+            extra = " (partial)"
+        typer.secho(
+            f"indexed {report.chunks} chunks "
+            f"({report.files_embedded} files embedded, "
+            f"{report.files_unchanged} unchanged){extra} → {out}",
+            fg="bright_black",
+        )
+    if report.chunks == 0 and report.errors:
+        typer.secho(
+            "RAG index empty after errors; semantic_search will be unavailable "
+            "until indexing succeeds (search_repo still works).",
+            fg="yellow",
+        )
 
 def _ensure_index(root_dir: Path, settings: Settings, *, auto_index: bool) -> None:
     if not auto_index:
@@ -156,6 +197,8 @@ def _run_agent_session(
     root_dir: Path,
     message: Optional[str],
     auto_index: bool = True,
+    mode: AgentMode = AgentMode.AGENT,
+    resume_session_id: Optional[str] = None,
 ) -> None:
     _ensure_index(root_dir, settings, auto_index=auto_index)
 
@@ -177,7 +220,9 @@ def _run_agent_session(
         sources=sources,
         shell_timeout_s=settings.shell_timeout_s,
     )
-    executor = ToolExecutor(registry)
+    executor = ToolExecutor(
+        registry, max_chars=settings.max_tool_result_chars
+    )
     models = build_llm_bundle(settings)
     memory = ConversationMemory(max_messages=settings.memory_max_messages)
     trace_path = root_dir / ".cozmo" / "traces.jsonl"
@@ -196,12 +241,18 @@ def _run_agent_session(
         else NullEventStore()
     )
     history = SessionHistory(event_store)
-    history.session_start(
-        provider=settings.provider,
-        model=settings.model,
-        worker_model=settings.worker_model or settings.model,
-        workdir=str(root_dir),
-    )
+    if resume_session_id:
+        if not _resume_into(history, memory, resume_session_id):
+            ux.print_err(f"session not found: {resume_session_id}")
+            raise typer.Exit(code=1)
+        ux.print_dim(f"resumed session {history.session_id}")
+    else:
+        history.session_start(
+            provider=settings.provider,
+            model=settings.model,
+            worker_model=settings.worker_model or settings.model,
+            workdir=str(root_dir),
+        )
     register_subagent_tool(
         registry,
         SubAgentService(
@@ -211,7 +262,17 @@ def _run_agent_session(
             history=history,
             temperature=settings.temperature,
             model_name=settings.worker_model or settings.model,
+            max_tool_result_chars=settings.max_tool_result_chars,
         ),
+    )
+    perm_store = PermissionStore.load(root_dir)
+    activity_holder: dict[str, Any] = {"act": None}
+    gate = PermissionGate(
+        workdir=root_dir,
+        store=perm_store,
+        mode=mode,
+        ask=_make_permission_asker(activity_holder),
+        default_choice=_default_permission_choice(),
     )
     runner = AgentRunner(
         models=models,
@@ -223,6 +284,8 @@ def _run_agent_session(
         policy=policy,
         temperature=settings.temperature,
         model_name=settings.worker_model or settings.model,
+        permission_gate=gate,
+        mode=mode,
     )
 
     typer.echo()
@@ -234,11 +297,12 @@ def _run_agent_session(
         rag_chunks=len(store),
         allow_write=settings.allow_write,
         allow_shell=settings.allow_shell,
+        mode=mode.value,
     )
     typer.echo()
 
     if message is not None:
-        _agent_once(runner, message, settings)
+        _agent_once(runner, message, settings, activity_holder=activity_holder)
         history.session_end()
         return
 
@@ -261,12 +325,17 @@ def _run_agent_session(
             break
         if raw in {"/help", "help"}:
             typer.echo(
-                "  /clear    reset conversation memory\n"
-                "  /compact  summarize older turns now\n"
-                "  /history  list recent sessions\n"
-                "  /config   show config paths\n"
-                "  /setup    re-run provider wizard\n"
-                "  /exit     quit"
+                "  /clear              reset conversation memory\n"
+                "  /compact            summarize older turns now\n"
+                "  /ask                explain-only mode (no write/shell)\n"
+                "  /plan               explore + propose (no write/shell)\n"
+                "  /agent              full tools (permission prompts)\n"
+                "  /sessions           list recent sessions\n"
+                "  /continue [id]      resume session (latest if no id)\n"
+                "  /export md|json     export current (or /export md <id>)\n"
+                "  /config             show config paths\n"
+                "  /setup              re-run provider wizard\n"
+                "  /exit               quit"
             )
             continue
         if raw == "/clear":
@@ -288,16 +357,33 @@ def _run_agent_session(
             else:
                 ux.print_dim("nothing to compact")
             continue
-        if raw == "/history":
-            rows = history.list_recent_sessions(limit=10)
-            if not rows:
-                ux.print_dim("no sessions yet")
-            else:
-                for row in rows:
-                    typer.echo(
-                        f"  {row.get('id')}  model={row.get('model', '?')}  "
-                        f"ts={row.get('started_at', '?')}"
-                    )
+        if raw in {"/ask", "/plan", "/agent"}:
+            new_mode = {
+                "/ask": AgentMode.ASK,
+                "/plan": AgentMode.PLAN,
+                "/agent": AgentMode.AGENT,
+            }[raw]
+            runner.set_mode(new_mode)
+            ux.print_dim(f"mode → {new_mode.value}")
+            continue
+        if raw in {"/sessions", "/history"}:
+            _print_sessions(history)
+            continue
+        if raw.startswith("/continue") or raw.startswith("/resume"):
+            parts = raw.split(maxsplit=1)
+            sid = parts[1].strip() if len(parts) > 1 else None
+            if not sid:
+                sid = history.most_recent_session_id()
+            if not sid:
+                ux.print_dim("no sessions to continue")
+                continue
+            if not _resume_into(history, memory, sid):
+                ux.print_err(f"session not found: {sid}")
+                continue
+            ux.print_dim(f"resumed session {history.session_id} ({len(memory)} msgs)")
+            continue
+        if raw.startswith("/export"):
+            _handle_export(raw, history)
             continue
         if raw == "/config":
             typer.echo(f"  {user_config_path()}")
@@ -308,8 +394,120 @@ def _run_agent_session(
             continue
         if not raw:
             continue
-        _agent_once(runner, text, settings)
+        _agent_once(runner, text, settings, activity_holder=activity_holder)
     history.session_end()
+
+
+def _resume_into(
+    history: SessionHistory,
+    memory: ConversationMemory,
+    session_id: str,
+) -> bool:
+    from cozmo.app.session_resume import hydrate_memory_from_events
+
+    events = history.list_events(session_id)
+    if not events:
+        return False
+    history.attach(session_id)
+    hydrate_memory_from_events(events, memory)
+    return True
+
+
+def _print_sessions(history: SessionHistory) -> None:
+    from datetime import datetime, timezone
+
+    rows = history.list_recent_sessions(limit=15)
+    if not rows:
+        ux.print_dim("no sessions yet")
+        return
+    for row in rows:
+        sid = row.get("id", "?")
+        model = row.get("model", "?")
+        preview = (row.get("preview") or "").strip() or "—"
+        ts = row.get("started_at")
+        try:
+            when = datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime(
+                "%Y-%m-%d %H:%M"
+            )
+        except (TypeError, ValueError, OSError):
+            when = str(ts or "?")
+        typer.echo(f"  {sid}  {when}  model={model}")
+        typer.secho(f"    {preview}", fg="bright_black")
+
+
+def _handle_export(raw: str, history: SessionHistory) -> None:
+    from cozmo.app.session_export import export_session_json, export_session_markdown
+
+    parts = raw.split()
+    fmt = "md"
+    sid: str | None = None
+    if len(parts) >= 2 and parts[1] in {"md", "json"}:
+        fmt = parts[1]
+        if len(parts) >= 3:
+            sid = parts[2]
+    elif len(parts) >= 2:
+        sid = parts[1]
+    sid = sid or history.session_id
+    events = history.list_events(sid)
+    if not events:
+        ux.print_err(f"no events for session {sid}")
+        return
+    index = next((r for r in history.list_recent_sessions(limit=50) if r.get("id") == sid), {})
+    if fmt == "json":
+        typer.echo(export_session_json(sid, events, index=index), nl=False)
+    else:
+        typer.echo(export_session_markdown(sid, events, index=index), nl=False)
+
+
+def _resolve_mode(*, ask: bool, plan: bool) -> AgentMode:
+    if ask and plan:
+        ux.print_err("use either --ask or --plan, not both")
+        raise typer.Exit(code=1)
+    if ask:
+        return AgentMode.ASK
+    if plan:
+        return AgentMode.PLAN
+    return AgentMode.AGENT
+
+
+def _default_permission_choice() -> PermissionChoice:
+    """Non-interactive default when no asker can run."""
+    if os.environ.get("COZMO_AUTO_ALLOW_PERMISSIONS") == "1":
+        return PermissionChoice.ALLOW_ONCE
+    return PermissionChoice.DENY
+
+
+def _make_permission_asker(activity_holder: dict[str, Any]):
+    """Interactive Allow once / Always allow / Deny; None when not a TTY."""
+    if not sys.stdin.isatty() or os.environ.get("COZMO_AUTO_ALLOW_PERMISSIONS") == "1":
+        return None
+
+    def ask(call: ToolCall, preview: str) -> PermissionChoice:
+        act = activity_holder.get("act")
+        if act is not None:
+            act.stop()
+        typer.echo()
+        typer.secho(f"  permission: {call.name}", fg="yellow")
+        for line in preview.splitlines()[:40]:
+            typer.secho(f"  {line}", fg="bright_black")
+        if preview.count("\n") >= 40:
+            typer.secho("  …", fg="bright_black")
+        try:
+            choice = ux.select(
+                "Allow this tool?",
+                [
+                    ("allow_once", "Allow once"),
+                    ("always_allow", "Always allow"),
+                    ("deny", "Deny"),
+                ],
+                default="allow_once",
+            )
+        except (typer.Exit, KeyboardInterrupt, EOFError):
+            return PermissionChoice.DENY
+        return PermissionChoice(choice)
+
+    return ask
+
 
 @app.callback(invoke_without_command=True)
 def root(
@@ -328,6 +526,17 @@ def root(
     no_index: bool = typer.Option(
         False, "--no-index", help="Skip auto-index on first launch"
     ),
+    plan: bool = typer.Option(
+        False, "--plan", help="Start in plan mode (explore only; no write/shell)"
+    ),
+    ask: bool = typer.Option(
+        False, "--ask", help="Start in ask mode (explain only; no write/shell)"
+    ),
+    continue_session: Optional[str] = typer.Option(
+        None,
+        "--continue",
+        help="Resume a session id (use '' / omit value via /continue in REPL)",
+    ),
 ) -> None:
     """Start the coding agent (default). Subcommands: setup, doctor, index, …"""
     if version:
@@ -344,6 +553,8 @@ def root(
         root_dir=root_dir,
         message=message,
         auto_index=not no_index,
+        mode=_resolve_mode(ask=ask, plan=plan),
+        resume_session_id=continue_session,
     )
 
 @app.command("chat")
@@ -393,6 +604,12 @@ def agent(
     ),
     model: Optional[str] = typer.Option(None, "--model", help="Model id override"),
     no_index: bool = typer.Option(False, "--no-index"),
+    plan: bool = typer.Option(
+        False, "--plan", help="Start in plan mode (explore only; no write/shell)"
+    ),
+    ask: bool = typer.Option(
+        False, "--ask", help="Start in ask mode (explain only; no write/shell)"
+    ),
 ) -> None:
     """Same as bare `cozmo` — kept as an explicit alias."""
     _ensure_config()
@@ -403,6 +620,7 @@ def agent(
         root_dir=root_dir,
         message=message,
         auto_index=not no_index,
+        mode=_resolve_mode(ask=ask, plan=plan),
     )
 
 @app.command("index")
@@ -635,10 +853,19 @@ def _friendly_llm_error(exc: BaseException, settings: Settings) -> str:
     return f"LLM error ({name}): {msg[:300]}"
 
 
-def _agent_once(runner: AgentRunner, text: str, settings: Settings) -> None:
+def _agent_once(
+    runner: AgentRunner,
+    text: str,
+    settings: Settings,
+    *,
+    activity_holder: dict[str, Any] | None = None,
+) -> None:
     from cozmo.cli.activity import Activity
 
     act = Activity()
+    if activity_holder is not None:
+        activity_holder["act"] = act
+    compacted = False
     try:
         act.thinking()
         for event in runner.run_events(text):
@@ -646,7 +873,12 @@ def _agent_once(runner: AgentRunner, text: str, settings: Settings) -> None:
                 act.thinking()
             elif event.kind == "compact":
                 act.stop()
+                compacted = True
                 ux.print_dim("memory compacted")
+                act.thinking()
+            elif event.kind == "permission":
+                act.stop()
+                ux.print_dim(f"  ✗ {event.tool_name}: {event.text}")
                 act.thinking()
             elif event.kind == "tool_call":
                 act.tool(event.tool_name)
@@ -680,18 +912,44 @@ def _agent_once(runner: AgentRunner, text: str, settings: Settings) -> None:
         return
     finally:
         act.stop()
+        if activity_holder is not None:
+            activity_holder["act"] = None
     result = runner.last_result
     if result:
-        _print_meter(settings.provider, settings.model, result.usage)
+        _print_meter(
+            settings.provider,
+            settings.model,
+            result.usage,
+            runner=runner,
+            compacted=compacted,
+        )
         typer.secho(
-            f"steps={result.steps} stop={result.stop_reason.value}",
+            f"steps={result.steps} stop={result.stop_reason.value} mode={runner.mode.value}",
             fg="bright_black",
         )
 
-def _print_meter(provider: str, model: str, usage: Usage) -> None:
-    line = format_cost_line(provider=provider, model=model, usage=usage)
-    if line:
-        typer.secho(f"\n{line}", fg="bright_black")
-
+def _print_meter(
+    provider: str,
+    model: str,
+    usage: Usage,
+    *,
+    runner: AgentRunner | None = None,
+    compacted: bool = False,
+) -> None:
+    bits: list[str] = []
+    cost = format_cost_line(provider=provider, model=model, usage=usage)
+    if cost:
+        bits.append(cost)
+    if runner is not None:
+        meter = context_meter(
+            runner.memory,
+            runner.policy,
+            system_prompt=runner.system_prompt,
+        )
+        bits.append(meter.format_line())
+        if compacted and "compacted" not in meter.format_line():
+            bits.append("compacted")
+    if bits:
+        typer.secho("\n" + " · ".join(bits), fg="bright_black")
 if __name__ == "__main__":
     app()

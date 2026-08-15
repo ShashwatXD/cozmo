@@ -93,6 +93,7 @@ def print_session_status(
     rag_chunks: int,
     allow_write: bool,
     allow_shell: bool,
+    mode: str = "agent",
 ) -> None:
     try:
         from rich.console import Console
@@ -102,6 +103,8 @@ def print_session_status(
             f"[{theme.CYAN}]{provider}[/]/{model}",
             f"[{theme.MUTED}]{workdir}[/]",
         ]
+        if mode and mode != "agent":
+            bits.append(f"[{theme.CYAN}]mode:{mode}[/]")
         if rag_chunks:
             bits.append(f"[{theme.MUTED}]rag:{rag_chunks}[/]")
         else:

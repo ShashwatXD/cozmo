@@ -23,6 +23,12 @@ def workspace_dir(workdir: Path) -> Path:
     return workdir.resolve() / ".cozmo"
 
 
+def permissions_path(workdir: Path | None = None) -> Path:
+    """Project-level allow/deny rules for mutating tools."""
+    root = (workdir or Path.cwd()).resolve()
+    return workspace_dir(root) / "permissions.json"
+
+
 def project_config_path(workdir: Path | None = None) -> Path:
     root = (workdir or Path.cwd()).resolve()
     return workspace_dir(root) / CONFIG_FILENAME

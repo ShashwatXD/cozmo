@@ -16,3 +16,6 @@ class NullEventStore:
 
     def list_sessions(self, *, limit: int = 20) -> list[dict[str, Any]]:
         return []
+
+    def most_recent_session_id(self) -> str | None:
+        return None
