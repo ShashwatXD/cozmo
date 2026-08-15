@@ -21,7 +21,9 @@ def test_model_router_fallback() -> None:
     router = ModelRouter({ModelRole.ORCHESTRATOR: a, ModelRole.WORKER: b})
     assert router.orchestrator is a
     assert router.worker is b
-    assert router.client_for(ModelRole.VERIFIER) is a
+    worker_only = ModelRouter({ModelRole.WORKER: b})
+    assert worker_only.orchestrator is b
+    assert worker_only.worker is b
 
 
 def test_subagent_depth_kill() -> None:

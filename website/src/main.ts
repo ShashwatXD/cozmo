@@ -141,7 +141,7 @@ function build(root: HTMLElement): Refs {
           "Multi-model: orchestrator + worker (+ optional verifier)",
           "Guardrails: compact context, max steps, cost/time kills",
           "Subagents for scoped explore without flooding memory",
-          "Hybrid RAG + symbols; session history under .cozmo/",
+          "Hybrid RAG; session history under .cozmo/",
         ]) {
           ul.append(el("li", undefined, item));
         }
