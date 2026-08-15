@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from cozmo.domain.rag import Chunk, RetrievalCandidate
-from cozmo.infra.rag.embedder import HashingEmbedder
+from cozmo.infra.rag.embedder import StubEmbedder
 from cozmo.infra.rag.store import VectorStore
 from cozmo.search.context_expand import expand_hits
 from cozmo.search.pipeline import RetrievalPipeline
@@ -55,7 +55,7 @@ def test_context_expand_surrounding_lines() -> None:
 
 
 def test_pipeline_vector_only_reranks_and_expands() -> None:
-    embedder = HashingEmbedder(dim=64)
+    embedder = StubEmbedder(dim=64)
     store = VectorStore()
     sources = {
         "math_utils.py": (

@@ -1,9 +1,10 @@
-"""Simple heuristic planner for code intelligence tasks."""
+"""Simple heuristic planner for retrieval / file tasks."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+
 
 @dataclass(frozen=True)
 class StepPlan:
@@ -15,37 +16,18 @@ class StepPlan:
     args: dict[str, object] = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)
 
-# Keyword patterns → (tool_name, action_description, arg_extractor)
+
+# Keyword patterns → (tool_name, action_description)
 _PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
-    (
-        re.compile(r"(?:find|where|locate|look\s?up).*(?:defin|declar|symbol)", re.I),
-        "symbol_search",
-        "Search for symbol definition",
-    ),
-    (
-        re.compile(r"(?:defin|declar).*(?:of|for)\s+(\w+)", re.I),
-        "symbol_search",
-        "Search for symbol definition",
-    ),
-    (
-        re.compile(r"(?:who|what|where).*(?:call|use|refer|import)", re.I),
-        "find_references",
-        "Find references to symbol",
-    ),
-    (
-        re.compile(r"(?:find|show|list).*(?:refer|call|usage)", re.I),
-        "find_references",
-        "Find references to symbol",
-    ),
-    (
-        re.compile(r"(?:depend|import|call)\s*(?:graph|tree|chain)", re.I),
-        "get_codebase_graph",
-        "Retrieve codebase graph",
-    ),
     (
         re.compile(r"(?:search|find|look)\s+(?:for\s+)?(?:code|function|class)", re.I),
         "semantic_search",
         "Semantic search for code",
+    ),
+    (
+        re.compile(r"(?:find|where|locate|look\s?up)", re.I),
+        "semantic_search",
+        "Semantic search for relevant code",
     ),
     (
         re.compile(r"(?:read|show|open|cat|view)\s+(?:file|content)", re.I),
@@ -53,6 +35,7 @@ _PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
         "Read file contents",
     ),
 ]
+
 
 def _extract_subject(task: str) -> str:
     """Try to pull the main subject (symbol / path) from the task string."""
@@ -64,8 +47,9 @@ def _extract_subject(task: str) -> str:
         return m.group(1)
     return ""
 
+
 class Planner:
-    """Keyword-based planner that suggests code intelligence tools for a task."""
+    """Keyword-based planner that suggests retrieval tools for a task."""
 
     def plan(self, task: str, available_tools: list[str]) -> list[StepPlan]:
         """Produce an ordered list of steps for *task* using *available_tools*."""
@@ -82,17 +66,10 @@ class Planner:
                 continue
 
             args: dict[str, object] = {}
-            if tool_name == "symbol_search" and subject:
-                args["query"] = subject
-            elif tool_name == "find_references" and subject:
-                args["symbol_name"] = subject
-            elif tool_name == "get_codebase_graph":
-                if re.search(r"import", task, re.I):
-                    args["graph_type"] = "import"
-                elif re.search(r"call", task, re.I):
-                    args["graph_type"] = "call"
-                else:
-                    args["graph_type"] = "dependency"
+            if tool_name == "semantic_search":
+                args["query"] = subject or task[:120]
+            elif tool_name == "read_file" and subject:
+                args["path"] = subject
 
             step_id = f"step_{len(steps) + 1}"
             depends = [steps[-1].step_id] if steps else []

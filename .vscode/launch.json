@@ -68,7 +68,7 @@
       "python": "${workspaceFolder}/.venv/bin/python"
     },
     {
-      "name": "Agent: one-shot symbols",
+      "name": "Agent: one-shot search",
       "type": "debugpy",
       "request": "launch",
       "module": "cozmo.cli.main",
@@ -77,7 +77,7 @@
         "-w",
         "${workspaceFolder}",
         "-m",
-        "Where is AgentRunner defined? Use symbol_search."
+        "Where is AgentRunner defined? Use semantic_search."
       ],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",

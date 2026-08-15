@@ -126,28 +126,30 @@ def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -
     if not quiet:
         typer.secho(f"indexed {n} chunks → {out}", fg="bright_black")
 
-    try:
-        from cozmo.indexer.repository_indexer import RepositoryIndexer as CodeRepoIndexer
-
-        code_index = CodeRepoIndexer().index(root_dir)
-        if not quiet:
-            typer.secho(
-                f"code-index {len(code_index.files)} files → {root_dir / '.cozmo' / 'code_index.json'}",
-                fg="bright_black",
-            )
-    except Exception as exc:
-        if not quiet:
-            typer.secho(f"code-index skipped: {exc}", fg="bright_black")
-
 def _ensure_index(root_dir: Path, settings: Settings, *, auto_index: bool) -> None:
     if not auto_index:
         return
     rag = index_path(root_dir)
-    code = root_dir / ".cozmo" / "code_index.json"
-    if rag.is_file() and code.is_file():
+    if rag.is_file():
         return
     ux.print_dim("First time in this repo — indexing…")
     _build_indexes(root_dir, settings, quiet=False)
+
+
+def _sources_from_store(root_dir: Path, store: Any) -> dict[str, str]:
+    """Load file text for context expansion from indexed chunk paths."""
+    sources: dict[str, str] = {}
+    for chunk, _emb in store.items():
+        if chunk.path in sources:
+            continue
+        full = root_dir / chunk.path
+        if not full.is_file():
+            continue
+        try:
+            sources[chunk.path] = full.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            pass
+    return sources
 
 def _run_agent_session(
     *,
@@ -167,31 +169,12 @@ def _run_agent_session(
     store = build_vector_store(settings, root_dir)
     policy = AgentPolicy.from_settings(settings)
 
-    code_index = None
-    sources: dict[str, str] = {}
-    code_index_path = root_dir / ".cozmo" / "code_index.json"
-    if code_index_path.is_file():
-        try:
-            from cozmo.domain.index import CodeIndex
-
-            code_index = CodeIndex.load(code_index_path)
-            for rel_path in code_index.files:
-                full = root_dir / rel_path
-                if full.is_file():
-                    try:
-                        sources[rel_path] = full.read_text(
-                            encoding="utf-8", errors="ignore"
-                        )
-                    except OSError:
-                        pass
-        except Exception:
-            pass
+    sources = _sources_from_store(root_dir, store)
 
     registry = build_default_registry(
         guard,
         vector_store=store,
         embedder=embedder,
-        code_index=code_index,
         sources=sources,
         shell_timeout_s=settings.shell_timeout_s,
     )
@@ -429,10 +412,10 @@ def index_cmd(
     embedder_name: Optional[str] = typer.Option(
         None,
         "--embedder",
-        help="hash | openai | ollama (overrides COZMO_EMBEDDER)",
+        help="openai | ollama | stub (overrides COZMO_EMBEDDER)",
     ),
 ) -> None:
-    """Rebuild RAG + code index (usually automatic on first `cozmo`)."""
+    """Rebuild embedding index (usually automatic on first `cozmo`)."""
     settings = load_settings()
     if embedder_name:
         data = settings.model_dump()
@@ -517,7 +500,7 @@ def config_cmd(
                 "allow_shell": False,
                 "allow_write": True,
                 "max_agent_steps": 8,
-                "embedder": "hash",
+                "embedder": "auto",
             }
             proj_path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             typer.secho(f"Created {proj_path}", fg="green")

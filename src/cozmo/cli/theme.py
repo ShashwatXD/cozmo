@@ -25,12 +25,13 @@ SHELL_DIM = "dim white"
 MUTED = "dim"
 
 # questionary Style values (prompt-toolkit color names)
+# Only the current row uses cyan; idle rows stay muted so nothing looks "stuck".
 QUESTIONARY = (
     ("qmark", "fg:cyan bold"),
     ("question", "fg:cyan bold"),
     ("answer", "fg:cyan bold"),
     ("pointer", "fg:cyan bold"),
     ("highlighted", "fg:cyan bold"),
-    ("selected", "fg:cyan"),
+    ("selected", "fg:#9ca3af"),
     ("instruction", "fg:#6b7280"),
 )

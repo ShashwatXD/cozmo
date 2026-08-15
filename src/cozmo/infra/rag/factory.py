@@ -1,11 +1,11 @@
-"""Build Embedder from Settings — auto-picks best backend for the provider."""
+"""Build Embedder from Settings — auto-picks OpenAI or Ollama embeddings."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from cozmo.domain.ports_rag import Embedder
-from cozmo.infra.rag.embedder import HashingEmbedder
+from cozmo.infra.rag.embedder import StubEmbedder
 from cozmo.infra.rag.openai_embedder import OpenAICompatibleEmbedder
 from cozmo.settings import Settings
 
@@ -21,34 +21,37 @@ def resolve_embedder(settings: Settings) -> tuple[str, str]:
     Default embedder=auto:
       openai/openrouter + api_key → openai semantic embeddings
       ollama                      → local nomic-embed-text
-      else                        → hash (offline fallback)
+      stub                        → StubEmbedder (tests / offline)
 
-    Explicit hash|openai|ollama in config still works for tests/power users.
+    Explicit openai|ollama|stub in config still works.
     """
     explicit = (settings.embedder or "auto").lower().strip()
-    if explicit == "hash":
-        return "hash", "hash"
     if explicit == "openai":
         return "openai", settings.embedding_model or _OPENAI_EMBED_MODEL
     if explicit == "ollama":
         return "ollama", settings.embedding_model or _OLLAMA_EMBED_MODEL
+    if explicit == "stub":
+        return "stub", "stub"
 
     if settings.provider in {"openai", "openrouter"} and settings.api_key:
         return "openai", _OPENAI_EMBED_MODEL
     if settings.provider == "ollama":
         return "ollama", _OLLAMA_EMBED_MODEL
-    return "hash", "hash"
+    return "stub", "stub"
 
 
 def build_embedder(settings: Settings) -> Embedder:
     backend, model = resolve_embedder(settings)
 
-    if backend == "hash":
-        return HashingEmbedder()
+    if backend == "stub":
+        return StubEmbedder()
 
     if backend == "openai":
         if not settings.api_key:
-            return HashingEmbedder()
+            raise ValueError(
+                "COZMO_API_KEY is required for OpenAI embeddings "
+                "(set embedder=ollama or provider=stub for offline)"
+            )
         return OpenAICompatibleEmbedder(
             model=model,
             api_key=settings.api_key,
@@ -64,7 +67,7 @@ def build_embedder(settings: Settings) -> Embedder:
             timeout_s=settings.timeout_s,
         )
 
-    return HashingEmbedder()
+    return StubEmbedder()
 
 
 def build_vector_store(settings: Settings, workdir: Path):

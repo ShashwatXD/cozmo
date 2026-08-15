@@ -7,11 +7,11 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 
-from cozmo.domain.index import CodeIndex
 from cozmo.domain.ports_rag import Embedder
 from cozmo.infra.rag.store import VectorStore
 
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]+|[0-9]+")
+
 
 @dataclass(frozen=True)
 class HybridHit:
@@ -24,8 +24,10 @@ class HybridHit:
     bm25_rank: int | None
     vector_rank: int | None
 
+
 def _tokenize(text: str) -> list[str]:
     return [t.lower() for t in _TOKEN.findall(text)]
+
 
 class _BM25:
     """Minimal BM25 over a corpus of (key, text) pairs."""
@@ -68,35 +70,22 @@ class _BM25:
         results.sort(key=lambda x: x[1], reverse=True)
         return results
 
+
 class HybridSearch:
+    """BM25 + vector RRF over embedded chunks (no AST / symbol index)."""
 
     RRF_K = 60
 
-    def __init__(
-        self, store: VectorStore, embedder: Embedder, index: CodeIndex
-    ) -> None:
+    def __init__(self, store: VectorStore, embedder: Embedder) -> None:
         self._store = store
         self._embedder = embedder
-        self._index = index
         self._bm25 = _BM25()
         self._texts: dict[str, tuple[str, int, str]] = {}
         self._built = False
 
     def build(self) -> None:
-        """Index symbols + vector-store chunks into BM25."""
-        for path, fs in self._index.files.items():
-            for sym in fs.symbols:
-                key = sym.qualified_name
-                text = f"{sym.name} {sym.docstring}"
-                self._bm25.add(key, text)
-                self._texts[key] = (
-                    sym.location.path,
-                    sym.location.start_line,
-                    text,
-                )
+        """Index vector-store chunks into BM25."""
         for chunk, _emb in self._store.items():
-            if chunk.id in self._texts:
-                continue
             self._bm25.add(chunk.id, chunk.text)
             self._texts[chunk.id] = (chunk.path, chunk.start_line, chunk.text)
         self._bm25.build()
@@ -113,7 +102,6 @@ class HybridSearch:
             key: rank + 1 for rank, (key, _) in enumerate(bm25_results[:recall_n])
         }
 
-        # Vector retrieval — wide pool for later rerank
         q_emb = self._embedder.embed(query)
         vec_hits = self._store.search(q_emb, top_k=recall_n)
         vec_ranks: dict[str, int] = {
@@ -140,10 +128,13 @@ class HybridSearch:
             if key in self._texts:
                 path, start_line, text = self._texts[key]
             else:
-                # From vector store only – find chunk info
                 for h in vec_hits:
                     if h.chunk.id == key:
-                        path, start_line, text = h.chunk.path, h.chunk.start_line, h.chunk.text
+                        path, start_line, text = (
+                            h.chunk.path,
+                            h.chunk.start_line,
+                            h.chunk.text,
+                        )
                         break
                 else:
                     continue

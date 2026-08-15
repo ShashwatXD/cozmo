@@ -3,12 +3,12 @@
 from pathlib import Path
 
 from cozmo.domain.rag import Chunk
-from cozmo.infra.rag.embedder import HashingEmbedder
+from cozmo.infra.rag.embedder import StubEmbedder
 from cozmo.infra.rag.store import JsonVectorStore, VectorStore, cosine
 
 
 def test_json_vector_store_roundtrip(tmp_path: Path) -> None:
-    emb = HashingEmbedder()
+    emb = StubEmbedder()
     store = JsonVectorStore()
     chunk = Chunk(id="1", path="a.py", start_line=1, text="def foo():\n  return 1\n")
     store.add(chunk, emb.embed(chunk.text))

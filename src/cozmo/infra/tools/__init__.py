@@ -53,7 +53,7 @@ SEARCH_SPEC = ToolSpec(
     description=(
         "Search for text in the workspace. Matches exact substrings and also "
         "ignores whitespace differences (e.g. query 'a-b' finds 'a - b'). "
-        "Use for snippets, operators, and keywords; prefer symbol_search for names."
+        "Use for snippets, operators, and keywords; prefer semantic_search for meaning."
     ),
     parameters={
         "type": "object",
@@ -120,7 +120,6 @@ def build_default_registry(
     *,
     vector_store: Any | None = None,
     embedder: Any | None = None,
-    code_index: Any | None = None,
     sources: dict[str, str] | None = None,
     shell_timeout_s: float = 60.0,
 ) -> ToolRegistry:
@@ -206,7 +205,6 @@ def build_default_registry(
         pipeline = RetrievalPipeline(
             vector_store,
             embedder,
-            code_index=code_index,
             sources=sources or {},
             candidate_k=50,
             top_k=top_k,
@@ -229,17 +227,6 @@ def build_default_registry(
     reg.register(SHELL_SPEC, run_shell)
     reg.register(GIT_STATUS_SPEC, git_status)
     reg.register(GIT_DIFF_SPEC, git_diff)
-
-    if code_index is not None:
-        from cozmo.infra.tools.code_intel import register_code_intel_tools
-
-        register_code_intel_tools(
-            reg,
-            code_index,
-            sources=sources or {},
-            vector_store=vector_store,
-            embedder=embedder,
-        )
 
     return reg
 

@@ -63,7 +63,7 @@ def test_load_settings_reads_user_json(monkeypatch, tmp_path: Path) -> None:
     cfg = tmp_path / ".cozmo" / "config.json"
     cfg.parent.mkdir(parents=True)
     cfg.write_text(
-        json.dumps({"provider": "ollama", "model": "qwen2.5:3b", "embedder": "hash"}),
+        json.dumps({"provider": "ollama", "model": "qwen2.5:3b", "embedder": "auto"}),
         encoding="utf-8",
     )
 

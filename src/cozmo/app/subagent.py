@@ -65,9 +65,6 @@ class SubAgentService:
                 "read_file",
                 "search_repo",
                 "semantic_search",
-                "symbol_search",
-                "find_references",
-                "get_codebase_graph",
                 "git_status",
                 "git_diff",
             }

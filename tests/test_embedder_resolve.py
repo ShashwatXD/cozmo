@@ -1,6 +1,8 @@
 """Auto embedder selection."""
 
-from cozmo.infra.rag.embedder import HashingEmbedder
+import pytest
+
+from cozmo.infra.rag.embedder import StubEmbedder
 from cozmo.infra.rag.factory import build_embedder, resolve_embedder
 from cozmo.infra.rag.openai_embedder import OpenAICompatibleEmbedder
 from cozmo.settings import Settings
@@ -20,19 +22,26 @@ def test_auto_ollama_uses_local_semantic() -> None:
     assert model == "nomic-embed-text"
 
 
-def test_auto_stub_uses_hash() -> None:
+def test_auto_stub_uses_stub_embedder() -> None:
     backend, model = resolve_embedder(Settings(provider="stub", embedder="auto"))
-    assert backend == "hash"
-    assert isinstance(build_embedder(Settings(provider="stub")), HashingEmbedder)
+    assert backend == "stub"
+    assert isinstance(build_embedder(Settings(provider="stub")), StubEmbedder)
 
 
-def test_explicit_hash_honored() -> None:
+def test_explicit_stub_honored() -> None:
     backend, _ = resolve_embedder(
-        Settings(provider="openai", api_key="sk", embedder="hash")
+        Settings(provider="openai", api_key="sk", embedder="stub")
     )
-    assert backend == "hash"
+    assert backend == "stub"
 
 
-def test_openai_without_key_falls_back_to_hash_instance() -> None:
-    emb = build_embedder(Settings(provider="openai", api_key=None, embedder="openai"))
-    assert isinstance(emb, HashingEmbedder)
+def test_openai_without_key_raises() -> None:
+    with pytest.raises(ValueError, match="COZMO_API_KEY"):
+        build_embedder(Settings(provider="openai", api_key=None, embedder="openai"))
+
+
+def test_build_openai_embedder() -> None:
+    emb = build_embedder(
+        Settings(provider="openai", api_key="sk-test", embedder="openai")
+    )
+    assert isinstance(emb, OpenAICompatibleEmbedder)

@@ -26,7 +26,7 @@ Package name on PyPI is `cozmo-agent`; the CLI binary is `cozmo`. Requires **Pyt
 | Cost / quality | Orchestrator + worker models; optional cheap worker for tool calls |
 | Safety | Workspace sandbox; writes and shell off until enabled |
 | Context | Auto compaction + hard budgets (steps, tools, cost, time) |
-| Retrieval | Hybrid BM25 + embeddings, lexical rerank, symbol / graph tools |
+| Retrieval | Hybrid BM25 + embeddings, lexical rerank |
 | Ops | Session history + traces under `.cozmo/`; `doctor` / `config` |
 
 ---
@@ -88,7 +88,7 @@ Each turn footer reports token usage estimate, `steps`, and `stop` reason (`comp
 ```text
 cli/  →  app/  →  domain/  ←  infra/
                  ↑
-            search / indexer
+            search / rag
 ```
 
 ```text
@@ -97,8 +97,8 @@ user
   ├─► guardrails (compact | kill on budgets)
   ├─► orchestrator (synthesis / compaction)
   ├─► worker (ReAct tool loop)
-  │      ├─ read / write / search / git / symbols
-  │      ├─ semantic_search → hybrid → rerank → expand
+  │      ├─ read / write / search / git
+  │      ├─ semantic_search → hybrid embeddings → rerank → expand
   │      └─ run_subtask → scoped subagent → JSON summary
   └─► .cozmo/history/*.jsonl   (+ traces.jsonl for telemetry)
 ```
@@ -138,9 +138,9 @@ export COZMO_WORKER_MODEL=gpt-4o-mini
 
 ### Retrieval
 
-1. Chunk files (~600 chars, line-aware) → embed → vector store  
+1. Chunk files (~600 chars, line-aware) → embed (OpenAI / Ollama) → vector store  
 2. Query: hybrid BM25 + vector recall (~50) → lexical rerank (~10) → ± line context  
-3. Code intel: `symbol_search`, `find_references`, `get_codebase_graph`
+3. Tools: `semantic_search`, `search_repo`, `read_file`
 
 Default store is JSON under `.cozmo/index.json`. Chroma is optional (`vector_backend=chroma`).
 

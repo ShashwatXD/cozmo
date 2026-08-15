@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from cozmo.infra.rag.chunking import chunk_text
-from cozmo.infra.rag.embedder import HashingEmbedder
+from cozmo.infra.rag.embedder import StubEmbedder
 from cozmo.infra.rag.indexer import RepoIndexer
 from cozmo.infra.rag.store import VectorStore, cosine
 from cozmo.infra.tools import build_default_registry
@@ -29,7 +29,7 @@ def test_index_and_search(tmp_path: Path) -> None:
         "def add(a, b):\n    return a + b + 1  # off-by-one\n",
         encoding="utf-8",
     )
-    embedder = HashingEmbedder()
+    embedder = StubEmbedder()
     store = VectorStore()
     n = RepoIndexer(embedder, store).index_dir(tmp_path)
     assert n >= 1
@@ -43,7 +43,7 @@ def test_semantic_tool(tmp_path: Path) -> None:
         "def add(a, b):\n    return a + b + 1  # off-by-one bug\n",
         encoding="utf-8",
     )
-    embedder = HashingEmbedder()
+    embedder = StubEmbedder()
     store = VectorStore()
     RepoIndexer(embedder, store).index_dir(tmp_path)
     guard = WorkspaceGuard(tmp_path)

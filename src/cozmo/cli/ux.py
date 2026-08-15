@@ -37,12 +37,13 @@ def select(
             q_choices.append(Choice(title=item, value=item))
             values.append(item)
     default = default if default in values else values[0]
+    # Pointer-only: use_indicator leaves ● stuck on the default while » moves.
     result = questionary.select(
         prompt,
         choices=q_choices,
         default=default,
         style=_style(),
-        use_indicator=True,
+        use_indicator=False,
         use_shortcuts=False,
         instruction="(↑/↓ · Enter)",
     ).ask()
