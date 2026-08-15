@@ -14,6 +14,7 @@ from pydantic_settings import (
 )
 
 from cozmo.infra.config.store import load_merged_file_config
+from cozmo.infra.mcp.types import McpServerConfig
 
 class _FileJsonSettingsSource(PydanticBaseSettingsSource):
 
@@ -74,6 +75,7 @@ class Settings(BaseSettings):
     history_max_sessions: int = 50
     history_max_events_per_session: int = 2000
     trace_enabled: bool = True
+    mcp_servers: list[McpServerConfig] = Field(default_factory=list)
 
     @classmethod
     def settings_customise_sources(

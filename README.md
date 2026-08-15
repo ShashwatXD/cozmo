@@ -54,6 +54,27 @@ pip install "cozmo-agent[vector]"   # chromadb
 # then: COZMO_VECTOR_BACKEND=chroma
 ```
 
+Optional MCP client (connect external tool servers):
+
+```bash
+pip install "cozmo-agent[mcp]"
+```
+
+Add to `~/.cozmo/config.json` or `.cozmo/config.json`:
+
+```json
+"mcp_servers": [
+  {
+    "name": "filesystem",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed"]
+  }
+]
+```
+
+Tools appear as `mcp__{server}__{tool}` in agent mode. Set `COZMO_MCP_DISABLED=1` to skip.
+
 ---
 
 ## Quick start

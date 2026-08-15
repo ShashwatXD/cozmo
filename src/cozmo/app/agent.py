@@ -18,6 +18,7 @@ from cozmo.domain.messages import Message, Role
 from cozmo.domain.mode import MUTATING_TOOLS, READ_ONLY_MODES, AgentMode, prompt_name_for_mode
 from cozmo.domain.ports import LLMClient
 from cozmo.domain.tools import ToolResult
+from cozmo.infra.mcp.types import is_mcp_tool
 from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools.registry import ToolExecutor, ToolRegistry
 from cozmo.prompts.loader import load_system_prompt
@@ -306,7 +307,11 @@ class AgentRunner:
     def _tool_specs_for_mode(self) -> list:
         specs = self._registry.specs()
         if self._mode in READ_ONLY_MODES:
-            return [s for s in specs if s.name not in MUTATING_TOOLS]
+            return [
+                s
+                for s in specs
+                if s.name not in MUTATING_TOOLS and not is_mcp_tool(s.name)
+            ]
         return specs
 
     def _execute_gated(self, call) -> ToolResult:

@@ -98,6 +98,7 @@ def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
         "history_max_sessions": settings.history_max_sessions,
         "history_max_events_per_session": settings.history_max_events_per_session,
         "trace_enabled": settings.trace_enabled,
+        "mcp_servers": [s.model_dump() for s in settings.mcp_servers],
     }
 
 def _ensure_config() -> None:
@@ -220,6 +221,17 @@ def _run_agent_session(
         sources=sources,
         shell_timeout_s=settings.shell_timeout_s,
     )
+    mcp_manager = None
+    if settings.mcp_servers and os.environ.get("COZMO_MCP_DISABLED") != "1":
+        from cozmo.infra.mcp import McpManager, register_mcp_tools
+
+        mcp_manager = McpManager()
+        warnings = mcp_manager.connect_servers(list(settings.mcp_servers))
+        for warn in warnings[:5]:
+            typer.secho(f"  mcp warn: {warn}", fg="yellow")
+        n = register_mcp_tools(registry, mcp_manager)
+        if n:
+            ux.print_dim(f"mcp: registered {n} tool(s) from {len(mcp_manager.tools)} listed")
     executor = ToolExecutor(
         registry, max_chars=settings.max_tool_result_chars
     )
@@ -302,100 +314,108 @@ def _run_agent_session(
     typer.echo()
 
     if message is not None:
-        _agent_once(runner, message, settings, activity_holder=activity_holder)
-        history.session_end()
+        try:
+            _agent_once(runner, message, settings, activity_holder=activity_holder)
+            history.session_end()
+        finally:
+            if mcp_manager is not None:
+                mcp_manager.close()
         return
 
-    while True:
-        try:
-            from rich.console import Console
-            from rich.prompt import Prompt
-
-            text = Prompt.ask("[bold cyan]❯[/]", console=Console())
-        except (KeyboardInterrupt, EOFError):
-            typer.echo()
-            break
-        except Exception:
+    try:
+        while True:
             try:
-                text = typer.prompt("❯")
-            except typer.Abort:
-                break
-        raw = text.strip()
-        if raw in {"/exit", "/quit", "exit", "quit"}:
-            break
-        if raw in {"/help", "help"}:
-            typer.echo(
-                "  /clear              reset conversation memory\n"
-                "  /compact            summarize older turns now\n"
-                "  /ask                explain-only mode (no write/shell)\n"
-                "  /plan               explore + propose (no write/shell)\n"
-                "  /agent              full tools (permission prompts)\n"
-                "  /sessions           list recent sessions\n"
-                "  /continue [id]      resume session (latest if no id)\n"
-                "  /export md|json     export current (or /export md <id>)\n"
-                "  /config             show config paths\n"
-                "  /setup              re-run provider wizard\n"
-                "  /exit               quit"
-            )
-            continue
-        if raw == "/clear":
-            memory.clear()
-            ux.print_dim("memory cleared")
-            continue
-        if raw == "/compact":
-            from cozmo.app.compaction import compact_memory
+                from rich.console import Console
+                from rich.prompt import Prompt
 
-            summary = compact_memory(
-                memory,
-                models.orchestrator,
-                policy,
-                temperature=settings.temperature,
-            )
-            if summary:
-                history.compact(summary)
-                ux.print_dim("memory compacted")
-            else:
-                ux.print_dim("nothing to compact")
-            continue
-        if raw in {"/ask", "/plan", "/agent"}:
-            new_mode = {
-                "/ask": AgentMode.ASK,
-                "/plan": AgentMode.PLAN,
-                "/agent": AgentMode.AGENT,
-            }[raw]
-            runner.set_mode(new_mode)
-            ux.print_dim(f"mode → {new_mode.value}")
-            continue
-        if raw in {"/sessions", "/history"}:
-            _print_sessions(history)
-            continue
-        if raw.startswith("/continue") or raw.startswith("/resume"):
-            parts = raw.split(maxsplit=1)
-            sid = parts[1].strip() if len(parts) > 1 else None
-            if not sid:
-                sid = history.most_recent_session_id()
-            if not sid:
-                ux.print_dim("no sessions to continue")
+                text = Prompt.ask("[bold cyan]❯[/]", console=Console())
+            except (KeyboardInterrupt, EOFError):
+                typer.echo()
+                break
+            except Exception:
+                try:
+                    text = typer.prompt("❯")
+                except typer.Abort:
+                    break
+            raw = text.strip()
+            if raw in {"/exit", "/quit", "exit", "quit"}:
+                break
+            if raw in {"/help", "help"}:
+                typer.echo(
+                    "  /clear              reset conversation memory\n"
+                    "  /compact            summarize older turns now\n"
+                    "  /ask                explain-only mode (no write/shell)\n"
+                    "  /plan               explore + propose (no write/shell)\n"
+                    "  /agent              full tools (permission prompts)\n"
+                    "  /sessions           list recent sessions\n"
+                    "  /continue [id]      resume session (latest if no id)\n"
+                    "  /export md|json     export current (or /export md <id>)\n"
+                    "  /config             show config paths\n"
+                    "  /setup              re-run provider wizard\n"
+                    "  /exit               quit"
+                )
                 continue
-            if not _resume_into(history, memory, sid):
-                ux.print_err(f"session not found: {sid}")
+            if raw == "/clear":
+                memory.clear()
+                ux.print_dim("memory cleared")
                 continue
-            ux.print_dim(f"resumed session {history.session_id} ({len(memory)} msgs)")
-            continue
-        if raw.startswith("/export"):
-            _handle_export(raw, history)
-            continue
-        if raw == "/config":
-            typer.echo(f"  {user_config_path()}")
-            continue
-        if raw == "/setup":
-            run_setup(non_interactive=False)
-            ux.print_dim("Restart cozmo to use new settings.")
-            continue
-        if not raw:
-            continue
-        _agent_once(runner, text, settings, activity_holder=activity_holder)
-    history.session_end()
+            if raw == "/compact":
+                from cozmo.app.compaction import compact_memory
+
+                summary = compact_memory(
+                    memory,
+                    models.orchestrator,
+                    policy,
+                    temperature=settings.temperature,
+                )
+                if summary:
+                    history.compact(summary)
+                    ux.print_dim("memory compacted")
+                else:
+                    ux.print_dim("nothing to compact")
+                continue
+            if raw in {"/ask", "/plan", "/agent"}:
+                new_mode = {
+                    "/ask": AgentMode.ASK,
+                    "/plan": AgentMode.PLAN,
+                    "/agent": AgentMode.AGENT,
+                }[raw]
+                runner.set_mode(new_mode)
+                ux.print_dim(f"mode → {new_mode.value}")
+                continue
+            if raw in {"/sessions", "/history"}:
+                _print_sessions(history)
+                continue
+            if raw.startswith("/continue") or raw.startswith("/resume"):
+                parts = raw.split(maxsplit=1)
+                sid = parts[1].strip() if len(parts) > 1 else None
+                if not sid:
+                    sid = history.most_recent_session_id()
+                if not sid:
+                    ux.print_dim("no sessions to continue")
+                    continue
+                if not _resume_into(history, memory, sid):
+                    ux.print_err(f"session not found: {sid}")
+                    continue
+                ux.print_dim(f"resumed session {history.session_id} ({len(memory)} msgs)")
+                continue
+            if raw.startswith("/export"):
+                _handle_export(raw, history)
+                continue
+            if raw == "/config":
+                typer.echo(f"  {user_config_path()}")
+                continue
+            if raw == "/setup":
+                run_setup(non_interactive=False)
+                ux.print_dim("Restart cozmo to use new settings.")
+                continue
+            if not raw:
+                continue
+            _agent_once(runner, text, settings, activity_holder=activity_holder)
+        history.session_end()
+    finally:
+        if mcp_manager is not None:
+            mcp_manager.close()
 
 
 def _resume_into(

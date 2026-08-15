@@ -1,10 +1,6 @@
 # Cozmo tracker
 
-Checklist of planned work. Mark an item `[x]` when it is complete.
-
-Related: [`PAINPOINTS.md`](./PAINPOINTS.md)
-
-**Design rule:** Take useful primitives from peer agents. Do not treat peer feature lists as the success criteria. Keep an owned ReAct loop. Do not adopt LangChain as the core runtime.
+**Design rule:** Keep an owned ReAct loop.
 
 ---
 
@@ -96,7 +92,7 @@ Ship items that support the thesis. Skip cosmetic work that does not improve con
 - [ ] **M7** `@path` and `@path:range` mentions
 - [x] **M8** Session list, continue, and export (tracked primarily under Phase 3; pin/name deferred)
 - [ ] **M9** Richer read-only git tools (blame, log); mutations remain gated
-- [ ] **M10** Optional MCP hooks
+- [x] **M10** Optional MCP hooks
 - [ ] **M11** Web search tool (`web_search`): query the public web for docs, errors, and APIs; return titled snippets plus URLs; cap result size; optional or keyed provider
 - [ ] **M12** Web fetch tool (`web_fetch`): fetch a URL and return truncated readable text for follow-up after search; same size caps as other tools
 
@@ -139,29 +135,3 @@ Differentiation after Phase 1 is solid. Not a peer parity list.
 - [ ] Docs or unfamiliar API questions can use `web_search`, then `web_fetch` on a chosen URL, with capped tool output
 
 ---
-
-## Out of scope
-
-Do not treat the following as project success criteria:
-
-- [ ] Cloning another agent role fleet or TUI checklist
-- [ ] Rewriting the core runtime onto LangChain
-- [ ] Shipping LSP, IDE, or cloud surfaces before the context compiler
-- [ ] Restoring incomplete symbol graphs only for marketing bullets
-
----
-
-## Suggested order
-
-```text
-Phase 1 (H1 through H7)
-  then Phase 2 (M1, M2, M4)
-  then Phase 3 (modes and sessions)
-  then Phase 5 bets in parallel with Phase 4 amplifiers
-```
-
----
-
-## Principle
-
-Harness owns the context budget. The model owns judgment inside that budget. Peer agents inspire primitives. Cozmo sets its own ceiling.

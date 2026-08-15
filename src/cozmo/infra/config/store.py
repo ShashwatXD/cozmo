@@ -41,6 +41,7 @@ USER_CONFIG_KEYS = frozenset(
         "history_max_sessions",
         "history_max_events_per_session",
         "trace_enabled",
+        "mcp_servers",
     }
 )
 
