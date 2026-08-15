@@ -38,10 +38,22 @@ function build(root: HTMLElement): Refs {
   const content = el("div", "content");
 
   const top = el("header", "top");
-  const topInner = el("div", "top__inner");
+  const topInner = el("div", "top__inner top__inner--nav");
+  const brand = el("a", "top__brand", "cozmo") as HTMLAnchorElement;
+  brand.href = "./";
+  const nav = el("nav", "top__nav");
+  const home = el("a", "is-active", "Home") as HTMLAnchorElement;
+  home.href = "./";
+  const docs = el("a", undefined, "How it works") as HTMLAnchorElement;
+  docs.href = "./docs.html";
+  const gh = el("a", undefined, "GitHub") as HTMLAnchorElement;
+  gh.href = GITHUB;
+  gh.target = "_blank";
+  gh.rel = "noreferrer";
+  nav.append(home, docs, gh);
   const meta = el("div", "top__meta");
-  meta.innerHTML = `v${VERSION} · <a href="${GITHUB}" target="_blank" rel="noreferrer">github</a>`;
-  topInner.append(meta);
+  meta.textContent = `v${VERSION}`;
+  topInner.append(brand, nav, meta);
   top.append(topInner);
 
   const hero = el("section", "hero");
@@ -140,20 +152,25 @@ function build(root: HTMLElement): Refs {
         for (const item of [
           "Multi-model: orchestrator + worker (+ optional verifier)",
           "Guardrails: compact context, max steps, cost/time kills",
-          "Subagents for scoped explore without flooding memory",
-          "Hybrid RAG; session history under .cozmo/",
+          "Ask / Plan / Agent modes with permission-gated writes",
+          "Hybrid RAG; session continue under .cozmo/",
         ]) {
           ul.append(el("li", undefined, item));
         }
         return ul;
       })(),
     ]),
-    section("Defaults", [
+    section("Learn more", [
       el(
         "p",
         undefined,
-        "Config in ~/.cozmo/config.json. Repo state in .cozmo/. Shell and writes stay off until you allow them.",
+        "Architecture, retrieval, and trust model. Kept short for a quick read.",
       ),
+      (() => {
+        const a = el("a", "spec-link", "How it works →") as HTMLAnchorElement;
+        a.href = "./docs.html";
+        return a;
+      })(),
     ]),
   );
 
