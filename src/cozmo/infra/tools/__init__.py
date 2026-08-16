@@ -128,6 +128,23 @@ SEMANTIC_SPEC = ToolSpec(
     },
 )
 
+HISTORY_SEARCH_SPEC = ToolSpec(
+    name="search_history",
+    description=(
+        "Search prior Cozmo session turns (user/assistant/compact summaries) "
+        "via hybrid retrieval. Use for past decisions or findings across sessions; "
+        "use semantic_search for current repo code."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "top_k": {"type": "integer", "default": 5},
+        },
+        "required": ["query"],
+    },
+)
+
 
 def _as_int(value: Any) -> int | None:
     if value is None or value == "":
@@ -188,6 +205,7 @@ def build_default_registry(
     vector_store: Any | None = None,
     embedder: Any | None = None,
     sources: dict[str, str] | None = None,
+    history_rag: Any | None = None,
     shell_timeout_s: float = 60.0,
 ) -> ToolRegistry:
     """Register default workspace tools (read, write, search, git, optional RAG)."""
@@ -267,10 +285,20 @@ def build_default_registry(
             )
         return "\n---\n".join(lines)
 
+    def search_history(args: dict[str, Any]) -> str:
+        if history_rag is None:
+            return (
+                "History RAG unavailable. Enable history_enabled and history_rag "
+                "in config (defaults on)."
+            )
+        top_k = int(args.get("top_k") or 5)
+        return history_rag.search(str(args.get("query") or ""), top_k=top_k)
+
     reg.register(READ_SPEC, read_file)
     reg.register(WRITE_SPEC, write_file)
     reg.register(SEARCH_SPEC, search_repo)
     reg.register(SEMANTIC_SPEC, semantic_search)
+    reg.register(HISTORY_SEARCH_SPEC, search_history)
     reg.register(SHELL_SPEC, run_shell)
     reg.register(GIT_STATUS_SPEC, git_status)
     reg.register(GIT_DIFF_SPEC, git_diff)

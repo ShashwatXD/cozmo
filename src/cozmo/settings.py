@@ -70,10 +70,11 @@ class Settings(BaseSettings):
     max_tool_result_chars: int = 24_000
     embedder: str = "auto"
     embedding_model: str = "text-embedding-3-small"
-    vector_backend: str = "json"
+    vector_backend: str = "chroma"
     history_enabled: bool = True
     history_max_sessions: int = 50
     history_max_events_per_session: int = 2000
+    history_rag: bool = True
     trace_enabled: bool = True
     mcp_servers: list[McpServerConfig] = Field(default_factory=list)
 

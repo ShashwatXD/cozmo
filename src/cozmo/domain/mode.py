@@ -10,7 +10,7 @@ class AgentMode(str, Enum):
 
     AGENT = "agent"  # full tools subject to permission prompts
     PLAN = "plan"  # explore then propose; mutating tools blocked until /agent
-    ASK = "ask"  # explain only; read/search/git; no write/shell
+    ASK = "ask"  
 
 
 MUTATING_TOOLS: frozenset[str] = frozenset({"write_file", "run_shell"})

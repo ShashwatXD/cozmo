@@ -40,6 +40,37 @@ def resolve_embedder(settings: Settings) -> tuple[str, str]:
     return "stub", "stub"
 
 
+def chromadb_available() -> bool:
+    try:
+        import chromadb  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def resolve_vector_backend(settings: Settings) -> str:
+    """
+    Effective vector store: ``chroma`` (default) or ``json``.
+
+    ``chromadb`` is a core dependency. Use ``vector_backend=json`` only to
+    force the zero-ANN JSON store (tests / debugging). ``auto`` still means
+    Chroma when available, else JSON.
+    """
+    raw = (getattr(settings, "vector_backend", None) or "chroma").lower().strip()
+    if raw in {"json", "file"}:
+        return "json"
+    if raw in {"chroma", "auto"}:
+        if chromadb_available():
+            return "chroma"
+        if raw == "chroma":
+            raise ImportError(
+                "chromadb is required for the default Chroma vector store. "
+                "Reinstall cozmo-agent, or set vector_backend=json."
+            )
+        return "json"
+    return "chroma" if chromadb_available() else "json"
+
+
 def build_embedder(settings: Settings) -> Embedder:
     backend, model = resolve_embedder(settings)
 
@@ -71,7 +102,7 @@ def build_embedder(settings: Settings) -> Embedder:
 
 
 def build_vector_store(settings: Settings, workdir: Path):
-    """Pick JSON or Chroma vector backend from Settings.vector_backend."""
+    """Pick Chroma (preferred) or JSON vector backend from Settings.vector_backend."""
     from pathlib import Path as PathType
 
     from cozmo.domain.ports_rag import VectorStore
@@ -79,7 +110,7 @@ def build_vector_store(settings: Settings, workdir: Path):
     from cozmo.infra.rag.store import JsonVectorStore
 
     root = workdir if isinstance(workdir, PathType) else PathType(workdir)
-    backend = (getattr(settings, "vector_backend", None) or "json").lower().strip()
+    backend = resolve_vector_backend(settings)
     if backend == "chroma":
         from cozmo.infra.rag.chroma_store import ChromaVectorStore
 

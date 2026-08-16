@@ -1,4 +1,4 @@
-"""Optional Chroma-backed VectorStore (install chromadb for ANN)."""
+"""Chroma-backed VectorStore (core dependency; ANN under .cozmo/chroma/)."""
 
 from __future__ import annotations
 
@@ -13,8 +13,7 @@ class ChromaVectorStore:
     """
     Local Chroma collection under path parent / chroma/.
 
-    Falls back to JsonVectorStore behavior when chromadb is not installed
-    only if constructed via factory with backend=json; this class requires chromadb.
+    Also keeps a JsonVectorStore mirror for items()/save() compatibility.
     """
 
     def __init__(self, persist_dir: Path, *, collection: str = "cozmo") -> None:
@@ -22,8 +21,8 @@ class ChromaVectorStore:
             import chromadb
         except ImportError as exc:
             raise ImportError(
-                "vector_backend=chroma requires chromadb. "
-                'Install with: pip install "cozmo-agent[vector]"'
+                "chromadb is required. Reinstall cozmo-agent "
+                "(chromadb is a core dependency)."
             ) from exc
 
         self._persist_dir = persist_dir

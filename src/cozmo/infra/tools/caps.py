@@ -10,6 +10,7 @@ TOOL_SOFT_CAPS: dict[str, int] = {
     "read_file": 32_000,
     "search_repo": 16_000,
     "semantic_search": 20_000,
+    "search_history": 12_000,
     "run_shell": 20_000,
     "git_diff": 24_000,
     "git_status": 8_000,

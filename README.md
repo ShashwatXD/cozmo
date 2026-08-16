@@ -47,12 +47,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install cozmo-agent
 ```
 
-Optional ANN backend:
-
-```bash
-pip install "cozmo-agent[vector]"   # chromadb
-# then: COZMO_VECTOR_BACKEND=chroma
-```
+Code vector index uses **Chroma** (core dependency, default `vector_backend=chroma`) under `.cozmo/chroma/`, with a JSON mirror at `.cozmo/index.json`. Set `"vector_backend": "json"` only to force the non-ANN store. History RAG stays on JSON (`history_index.json`) — Chroma is only for the code vector index.
 
 Optional MCP client (connect external tool servers):
 
@@ -164,9 +159,9 @@ export COZMO_WORKER_MODEL=gpt-4o-mini
 
 1. Chunk files (~600 chars, line-aware) → embed (OpenAI / Ollama) → vector store  
 2. Query: hybrid BM25 + vector recall (~50) → lexical rerank (~10) → ± line context  
-3. Tools: `semantic_search`, `search_repo`, `read_file`
+3. Tools: `semantic_search`, `search_history`, `search_repo`, `read_file`
 
-Default store is JSON under `.cozmo/index.json`. Chroma is optional (`vector_backend=chroma`).
+Default code store is **Chroma** (`vector_backend=chroma`) under `.cozmo/chroma/` (JSON mirror at `index.json`). History search uses a separate JSON file.
 
 ### Subagents
 
@@ -194,6 +189,7 @@ Tools cannot leave the workspace root (`WorkspaceGuard`).
 | `<repo>/.cozmo/config.json` | Project overrides |
 | `<repo>/.cozmo/index.json` | Vector index (or `chroma/`) |
 | `<repo>/.cozmo/history/` | Session event JSONL |
+| `<repo>/.cozmo/history_index.json` | Vector index over past turns (`search_history`) |
 | `<repo>/.cozmo/traces.jsonl` | Low-level LLM/tool telemetry |
 
 ```bash
@@ -215,7 +211,8 @@ cozmo config --show    # secrets masked
   "max_agent_steps": 8,
   "max_messages_before_compact": 30,
   "history_enabled": true,
-  "vector_backend": "json",
+  "history_rag": true,
+  "vector_backend": "chroma",
   "trace_enabled": true
 }
 ```
@@ -250,12 +247,8 @@ Common flags: `-w / --workdir`, `-p / --provider`, `--model`, `-m / --message`, 
 git clone https://github.com/ShashwatXD/cozmo.git
 cd cozmo
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev]"             # chromadb is a core dep
 pytest -q
-```
-
-```bash
-pip install -e ".[vector]"          # optional Chroma
 cd website && npm install && npm run dev   # marketing site
 ```
 

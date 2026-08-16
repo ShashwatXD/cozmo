@@ -33,11 +33,11 @@ from cozmo.infra.config.paths import (
 from cozmo.cli import ux
 from cozmo.cli.setup_wizard import run_setup
 from cozmo.infra.config.store import load_user_config, save_user_config
-from cozmo.infra.history import JsonlEventStore
+from cozmo.infra.history import HistoryRagIndex, JsonlEventStore
 from cozmo.infra.history.null import NullEventStore
 from cozmo.infra.llm.factory import build_llm
 from cozmo.infra.rag import RepoIndexer
-from cozmo.infra.rag.factory import build_embedder, build_vector_store
+from cozmo.infra.rag.factory import build_embedder, build_vector_store, resolve_vector_backend
 from cozmo.infra.rag.paths import index_path
 from cozmo.infra.rag.store import JsonVectorStore
 from cozmo.infra.telemetry.tracer import Tracer
@@ -97,6 +97,7 @@ def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
         "history_enabled": settings.history_enabled,
         "history_max_sessions": settings.history_max_sessions,
         "history_max_events_per_session": settings.history_max_events_per_session,
+        "history_rag": settings.history_rag,
         "trace_enabled": settings.trace_enabled,
         "mcp_servers": [s.model_dump() for s in settings.mcp_servers],
     }
@@ -133,14 +134,21 @@ def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -
     store = existing
     report = RepoIndexer(embedder, store).index_dir(root_dir, incremental=True)
     out = index_path(root_dir)
-    backend = build_vector_store(settings, root_dir)
-    if settings.vector_backend == "chroma":
+    try:
+        backend_name = resolve_vector_backend(settings)
+    except ImportError as exc:
+        typer.secho(f"index: {exc}", fg="yellow")
+        backend_name = "json"
+    if backend_name == "chroma":
+        backend = build_vector_store(settings, root_dir)
         backend.clear()
         for chunk, emb in store.items():
             backend.add(chunk, emb)
         backend.save(out)
+        dest = f"{out} + chroma/"
     else:
         store.save(out)
+        dest = str(out)
 
     if report.errors and not quiet:
         for err in report.errors[:5]:
@@ -157,7 +165,8 @@ def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -
         typer.secho(
             f"indexed {report.chunks} chunks "
             f"({report.files_embedded} files embedded, "
-            f"{report.files_unchanged} unchanged){extra} → {out}",
+            f"{report.files_unchanged} unchanged) "
+            f"[{backend_name}]{extra} → {dest}",
             fg="bright_black",
         )
     if report.chunks == 0 and report.errors:
@@ -214,11 +223,33 @@ def _run_agent_session(
 
     sources = _sources_from_store(root_dir, store)
 
+    event_store = (
+        JsonlEventStore(
+            root_dir,
+            enabled=settings.history_enabled,
+            max_sessions=settings.history_max_sessions,
+            max_events_per_session=settings.history_max_events_per_session,
+        )
+        if settings.history_enabled
+        else NullEventStore()
+    )
+    history_rag = None
+    if (
+        settings.history_enabled
+        and settings.history_rag
+        and not isinstance(event_store, NullEventStore)
+    ):
+        history_rag = HistoryRagIndex(root_dir, embedder, enabled=True)
+        n = history_rag.catch_up(event_store, limit=settings.history_max_sessions)
+        if n:
+            ux.print_dim(f"history rag: indexed {n} new chunk(s)")
+
     registry = build_default_registry(
         guard,
         vector_store=store,
         embedder=embedder,
         sources=sources,
+        history_rag=history_rag,
         shell_timeout_s=settings.shell_timeout_s,
     )
     mcp_manager = None
@@ -242,17 +273,7 @@ def _run_agent_session(
         trace_path if settings.trace_enabled else None,
         enabled=settings.trace_enabled,
     )
-    event_store = (
-        JsonlEventStore(
-            root_dir,
-            enabled=settings.history_enabled,
-            max_sessions=settings.history_max_sessions,
-            max_events_per_session=settings.history_max_events_per_session,
-        )
-        if settings.history_enabled
-        else NullEventStore()
-    )
-    history = SessionHistory(event_store)
+    history = SessionHistory(event_store, rag_index=history_rag)
     if resume_session_id:
         if not _resume_into(history, memory, resume_session_id):
             ux.print_err(f"session not found: {resume_session_id}")

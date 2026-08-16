@@ -45,3 +45,14 @@ def session_events_path(workdir: Path, session_id: str) -> Path:
 
 def sessions_index_path(workdir: Path | None = None) -> Path:
     return workspace_history_dir(workdir) / "sessions.jsonl"
+
+
+def history_index_path(workdir: Path | None = None) -> Path:
+    """Vector index over past session turns (separate from code `index.json`)."""
+    root = (workdir or Path.cwd()).resolve()
+    return workspace_dir(root) / "history_index.json"
+
+
+def history_rag_meta_path(workdir: Path | None = None) -> Path:
+    root = (workdir or Path.cwd()).resolve()
+    return workspace_dir(root) / "history_rag_meta.json"

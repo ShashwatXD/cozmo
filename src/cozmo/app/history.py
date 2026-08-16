@@ -2,22 +2,48 @@
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+from typing import TYPE_CHECKING, Any
 
 from cozmo.domain.events import EventKind, SessionEvent, new_session_id
 from cozmo.domain.guardrails import StopReason
 from cozmo.domain.ports_history import EventStore
 
+if TYPE_CHECKING:
+    from cozmo.infra.history.rag import HistoryRagIndex
+
+logger = logging.getLogger(__name__)
+
 
 class SessionHistory:
-    def __init__(self, store: EventStore, *, session_id: str | None = None) -> None:
+    def __init__(
+        self,
+        store: EventStore,
+        *,
+        session_id: str | None = None,
+        rag_index: HistoryRagIndex | None = None,
+    ) -> None:
         self._store = store
         self.session_id = session_id or new_session_id()
+        self._rag_index = rag_index
 
     def emit(self, kind: EventKind, **data: Any) -> SessionEvent:
         event = SessionEvent(kind=kind, session_id=self.session_id, data=dict(data))
         self._store.append(event)
+        self._maybe_index(event)
         return event
+
+    def _maybe_index(self, event: SessionEvent) -> None:
+        if self._rag_index is None or not self._rag_index.enabled:
+            return
+        from cozmo.infra.history.rag import INDEXABLE
+
+        if event.kind not in INDEXABLE:
+            return
+        try:
+            self._rag_index.sync_from_store(self._store, self.session_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("history rag index failed: %s", exc)
 
     def session_start(self, **data: Any) -> SessionEvent:
         return self.emit(EventKind.SESSION_START, **data)

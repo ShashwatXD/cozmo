@@ -119,6 +119,7 @@ class SubAgentService:
                 "read_file",
                 "search_repo",
                 "semantic_search",
+                "search_history",
                 "git_status",
                 "git_diff",
             }
