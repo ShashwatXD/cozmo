@@ -104,6 +104,7 @@ class SubAgentService:
         model_name: str = "stub-model",
         depth: int = 0,
         allowed_tools: frozenset[str] | None = None,
+        system_prompt: str | None = None,
         max_tool_result_chars: int = 24_000,
     ) -> None:
         self._models = models
@@ -124,6 +125,7 @@ class SubAgentService:
                 "git_diff",
             }
         )
+        self._system_prompt = system_prompt or load_system_prompt("subagent")
 
     def run(self, goal: str, *, max_steps: int | None = None) -> str:
         depth_stop = self._policy.check_subagent_depth(self._depth + 1)
@@ -168,7 +170,7 @@ class SubAgentService:
             memory=ConversationMemory(max_messages=child_policy.memory_max_messages),
             history=None,
             policy=child_policy,
-            system_prompt=load_system_prompt("subagent"),
+            system_prompt=self._system_prompt,
             temperature=self._temperature,
             model_name=self._model_name,
             depth=self._depth + 1,

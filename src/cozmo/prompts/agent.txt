@@ -18,5 +18,7 @@ Tool guide:
 - read_file: prefer around_line from a search hit (window ~80) or start_line/end_line
 - write_file: only after reading the region you will change; the harness may ask the user to approve writes and shell
 - run_shell: may require an interactive allow (once / always / deny)
+- run_subtask: scoped read/search subagent for one sub-goal (evidence pack JSON)
+- run_team: hierarchical team (director → researcher/coder/reviewer → synthesizer) for complex tasks
 
 Never conclude code is missing after a single empty search. Never answer from search snippets alone when the question needs behavior or definitions.

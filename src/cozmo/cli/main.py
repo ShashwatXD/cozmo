@@ -18,6 +18,7 @@ from cozmo.app.history import SessionHistory
 from cozmo.app.model_router import build_llm_bundle
 from cozmo.app.permissions import PermissionChoice, PermissionGate
 from cozmo.app.subagent import SubAgentService, register_subagent_tool
+from cozmo.app.team import TeamService, register_team_tool
 from cozmo.domain.completion import Usage
 from cozmo.domain.cost import format_cost_line
 from cozmo.domain.guardrails import AgentPolicy
@@ -289,6 +290,18 @@ def _run_agent_session(
     register_subagent_tool(
         registry,
         SubAgentService(
+            models=models,
+            parent_registry=registry,
+            policy=policy,
+            history=history,
+            temperature=settings.temperature,
+            model_name=settings.worker_model or settings.model,
+            max_tool_result_chars=settings.max_tool_result_chars,
+        ),
+    )
+    register_team_tool(
+        registry,
+        TeamService(
             models=models,
             parent_registry=registry,
             policy=policy,
@@ -704,11 +717,19 @@ def eval_cmd(
     passed = sum(1 for r in results if r.passed)
     for r in results:
         mark = "PASS" if r.passed else "FAIL"
+        prefix = f"[{r.suite}]" if r.suite != "golden" else "[golden]"
         typer.secho(
-            f"[{mark}] {r.case_id}: {r.detail[:120]}",
+            f"{prefix} [{mark}] {r.case_id}: {r.detail[:140]}",
             fg="green" if r.passed else "red",
         )
+    golden = [r for r in results if r.suite == "golden"]
+    grounded = [r for r in results if r.suite == "groundedness"]
     typer.echo(f"\n{passed}/{len(results)} passed")
+    if grounded:
+        typer.echo(f"  golden: {sum(1 for r in golden if r.passed)}/{len(golden)}")
+        typer.echo(
+            f"  groundedness: {sum(1 for r in grounded if r.passed)}/{len(grounded)}"
+        )
     if passed != len(results):
         raise typer.Exit(code=1)
 
@@ -920,6 +941,10 @@ def _agent_once(
             elif event.kind == "permission":
                 act.stop()
                 ux.print_dim(f"  ✗ {event.tool_name}: {event.text}")
+                act.thinking()
+            elif event.kind == "stuck":
+                act.stop()
+                ux.print_dim(f"  ⚠ stuck: {event.text}")
                 act.thinking()
             elif event.kind == "tool_call":
                 act.tool(event.tool_name)

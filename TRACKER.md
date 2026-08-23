@@ -7,9 +7,10 @@
 ## Already shipped (baseline)
 
 - [x] Owned ReAct agent loop (`AgentRunner`)
-- [x] Guardrails, budgets, and compaction
+- [x] Stuck detector (repeating tool loop heuristics)
 - [x] Hybrid BM25 and vector RAG with `semantic_search`
 - [x] `run_subtask` subagent
+- [x] `run_team` multi-agent teams (director → workers → synthesizer)
 - [x] Workspace sandbox (`WorkspaceGuard`)
 - [x] Session history JSONL and traces under `.cozmo/`
 - [x] Multi-provider setup (BYOK)

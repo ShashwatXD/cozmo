@@ -75,6 +75,9 @@ class SessionHistory:
     def subagent(self, goal: str, **data: Any) -> SessionEvent:
         return self.emit(EventKind.SUBAGENT, goal=goal[:1000], **data)
 
+    def team(self, task: str, **data: Any) -> SessionEvent:
+        return self.emit(EventKind.SUBAGENT, goal=task[:1000], kind="team", **data)
+
     def list_recent_sessions(self, *, limit: int = 10) -> list[dict]:
         from cozmo.app.session_resume import session_preview
 

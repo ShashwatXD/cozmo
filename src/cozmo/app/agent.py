@@ -21,6 +21,7 @@ from cozmo.domain.tools import ToolResult
 from cozmo.infra.mcp.types import is_mcp_tool
 from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools.registry import ToolExecutor, ToolRegistry
+from cozmo.app.stuck_detector import detect_stuck, step_from_tool_call
 from cozmo.prompts.loader import load_system_prompt
 
 
@@ -100,6 +101,8 @@ class AgentRunner:
         self._session_cost = 0.0
         self._session_started = time.monotonic()
         self.last_result: AgentResult | None = None
+        self._stuck_steps: list = []
+        self._stuck_warned = False
 
     @property
     def memory(self) -> ConversationMemory:
@@ -154,6 +157,8 @@ class AgentRunner:
         tools = self._tool_specs_for_mode()
         total_usage = Usage()
         self.last_result = None
+        self._stuck_steps = []
+        self._stuck_warned = False
         max_steps = self._policy.max_agent_steps
 
         for step in range(1, max_steps + 1):
@@ -161,6 +166,24 @@ class AgentRunner:
             if stop is not None:
                 yield from self._finish_stopped(messages, total_usage, step - 1, stop)
                 return
+
+            if not self._stuck_warned:
+                verdict = detect_stuck(self._stuck_steps)
+                if verdict.stuck:
+                    self._stuck_warned = True
+                    hint = f"[SYSTEM — STUCK DETECTOR]\n{verdict.message}"
+                    messages.append(Message(role=Role.USER, content=hint))
+                    if self._tracer:
+                        self._tracer.emit(
+                            "stuck",
+                            reason=verdict.reason,
+                            message=verdict.message,
+                        )
+                    yield AgentEvent(
+                        kind="stuck",
+                        text=verdict.message,
+                        stop_reason=verdict.reason,
+                    )
 
             yield AgentEvent(kind="thinking")
             t0 = time.perf_counter()
@@ -263,6 +286,14 @@ class AgentRunner:
                     kind="tool_result",
                     text=tool_result.content,
                     tool_name=call.name,
+                )
+                self._stuck_steps.append(
+                    step_from_tool_call(
+                        tool_name=call.name,
+                        args=call.arguments,
+                        result=tool_result.content[:500],
+                        is_error=tool_result.is_error,
+                    )
                 )
                 messages.append(
                     Message(
