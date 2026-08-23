@@ -7,10 +7,12 @@
 ## Already shipped (baseline)
 
 - [x] Owned ReAct agent loop (`AgentRunner`)
+- [x] Guardrails, budgets, and compaction
 - [x] Stuck detector (repeating tool loop heuristics)
 - [x] Hybrid BM25 and vector RAG with `semantic_search`
 - [x] `run_subtask` subagent
 - [x] `run_team` multi-agent teams (director → workers → synthesizer)
+- [x] Groundedness + citation eval suite (`cozmo eval`)
 - [x] Workspace sandbox (`WorkspaceGuard`)
 - [x] Session history JSONL and traces under `.cozmo/`
 - [x] Multi-provider setup (BYOK)
@@ -104,10 +106,10 @@ Ship items that support the thesis. Skip cosmetic work that does not improve con
 Differentiation after Phase 1 is solid. Not a peer parity list.
 
 - [ ] **Evidence graph**: session graph linking file, claim, and open question; subsequent tools prefer expanding that graph
-- [ ] **Confidence-gated answers**: weak citations trigger further investigation or an explicit refusal to invent
+- [ ] **Confidence-gated answers**: weak citations trigger further investigation or an explicit refusal to invent — **partial:** `score_groundedness()` in eval; not in agent loop
 - [ ] **Dual-index fusion**: ripgrep and semantic hits as one ranked evidence stream, enforced by the harness
 - [ ] **Context compiler**: before each LLM call, pin the goal and citations; compress prior tool output to fingerprints (example: `agent.py:40-90`)
-- [ ] **Eval gate**: golden find and read tasks; harness regressions fail CI
+- [ ] **Eval gate**: golden find and read tasks; harness regressions fail CI — **partial:** golden + groundedness/citation suites in `cozmo eval`
 
 **Exit criteria:** Model input is compiled evidence under harness control, with evals that detect retrieval and context regressions.
 
@@ -121,7 +123,7 @@ Differentiation after Phase 1 is solid. Not a peer parity list.
 | **Phase 2** | Permission prompts for write and shell. Visible context budget. |
 | **Phase 3** | Ask, Plan, and Agent modes. List and continue sessions. |
 | **Phase 4** | Project memory, checks, path ranges, richer git, web search and fetch. Daily-driver polish. |
-| **Phase 5** | Context compiler, dual-index fusion, confidence gating, eval gates. |
+| **Phase 5** | Context compiler, dual-index fusion, confidence gating (eval partial), eval gates (partial). |
 
 ### Target user flows
 
