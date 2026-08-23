@@ -102,7 +102,7 @@ function turnBody(): HTMLElement {
     el(
       "p",
       undefined,
-      "User input hits guardrails. The worker model runs the tool loop. The orchestrator handles compaction (and can be a stronger model). Subagents explore in a tight budget and return a compact evidence pack, not a full chat dump.",
+      "User input hits guardrails. The worker model runs the tool loop. The orchestrator handles compaction (and can be a stronger model). Subagents and teams explore in a tight budget and return compact evidence — not full chat dumps. A stuck detector nudges the model when tool calls repeat.",
     ),
   );
   const chart = el("div", "flow__chart docs-chart");
@@ -137,7 +137,7 @@ function archBody(): HTMLElement {
   const layers = el("div", "docs-layers");
   const rows: [string, string][] = [
     ["cli/", "REPL, modes, permission prompts, context meter"],
-    ["app/", "AgentRunner, model router, compaction, sessions"],
+    ["app/", "AgentRunner, teams, stuck detector, compaction, groundedness eval, sessions"],
     ["domain/", "Messages, policies, ports. No SDK imports."],
     ["infra/", "LLM providers, tools, RAG store, history JSONL"],
   ];
@@ -157,6 +157,8 @@ function craftBody(): HTMLElement {
     "Multi-model: orchestrator for compaction, optional cheaper worker_model for the tool loop",
     "BYOK multi-provider: OpenAI, Anthropic, OpenRouter, Ollama, OpenAI-compatible endpoints",
     "Offline test suite with stub LLM/embedder. CI does not need API keys.",
+    "cozmo eval: golden agent cases + groundedness/citation faithfulness checks",
+    "Multi-agent run_team (director → workers → synthesizer) and stuck detector in the ReAct loop",
     "Session continue and export; investigation trails under .cozmo/history/",
     "Incremental RAG indexing with graceful degrade when embeddings fail",
     "Typed tool registry, result size caps, and workspace path sandboxing",
@@ -229,6 +231,14 @@ function build(root: HTMLElement): void {
       blurb: "Budgets you can see",
       body: para(
         "Soft compaction, hard budgets on steps, tools, cost, and time. Live ctx≈N/budget meter so sessions stay observable, not opaque.",
+      ),
+    },
+    {
+      id: "eval",
+      title: "Eval & faithfulness",
+      blurb: "Golden tasks + groundedness",
+      body: para(
+        "cozmo eval runs stub-safe golden agent scenarios and deterministic groundedness checks: claim overlap against retrieved context and path:line citation validation. No LLM judge — suitable for CI.",
       ),
     },
     {

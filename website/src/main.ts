@@ -125,7 +125,7 @@ function build(root: HTMLElement): Refs {
 
   const split = el("div", "flow__split");
   split.innerHTML =
-    '<span class="flow__split-note">worker may call <code>run_subtask</code> → child returns JSON summary only</span>';
+    '<span class="flow__split-note">worker may call <code>run_subtask</code> or <code>run_team</code> → compact evidence back to parent · stuck detector breaks tool loops</span>';
   chart.append(split);
   flowInner.append(chart);
   flow.append(flowInner);
@@ -154,6 +154,8 @@ function build(root: HTMLElement): Refs {
           "Guardrails: compact context, max steps, cost/time kills",
           "Ask / Plan / Agent modes with permission-gated writes",
           "Hybrid RAG; session continue under .cozmo/",
+          "run_team multi-agent orchestration; stuck detector on tool loops",
+          "cozmo eval: golden cases + groundedness/citation checks",
         ]) {
           ul.append(el("li", undefined, item));
         }
