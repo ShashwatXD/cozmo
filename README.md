@@ -26,6 +26,7 @@ Package name on PyPI is `cozmo-agent`; the CLI binary is `cozmo`. Requires **Pyt
 | Cost / quality | Orchestrator + worker models; optional cheap worker for tool calls |
 | Safety | Workspace sandbox; writes and shell off until enabled |
 | Context | Auto compaction + hard budgets (steps, tools, cost, time) |
+| Loop safety | Stuck detector nudges on repeating tool patterns |
 | Retrieval | Hybrid BM25 + embeddings, lexical rerank |
 | Ops | Session history + traces under `.cozmo/`; `doctor` / `config` |
 
@@ -119,7 +120,8 @@ user
   ├─► worker (ReAct tool loop)
   │      ├─ read / write / search / git
   │      ├─ semantic_search → hybrid embeddings → rerank → expand
-  │      └─ run_subtask → scoped subagent → JSON summary
+  │      ├─ run_subtask → scoped subagent → evidence pack JSON
+  │      └─ run_team → director → workers → synthesizer
   └─► .cozmo/history/*.jsonl   (+ traces.jsonl for telemetry)
 ```
 
@@ -159,13 +161,21 @@ export COZMO_WORKER_MODEL=gpt-4o-mini
 
 1. Chunk files (~600 chars, line-aware) → embed (OpenAI / Ollama) → vector store  
 2. Query: hybrid BM25 + vector recall (~50) → lexical rerank (~10) → ± line context  
-3. Tools: `semantic_search`, `search_history`, `search_repo`, `read_file`
+3. Tools: `semantic_search`, `search_history`, `search_repo`, `read_file`, `run_subtask`, `run_team`
 
 Default code store is **Chroma** (`vector_backend=chroma`) under `.cozmo/chroma/` (JSON mirror at `index.json`). History search uses a separate JSON file.
 
 ### Subagents
 
-The worker may call `run_subtask` with a goal. A child agent runs with read/search tools only, tighter step limits, and returns a **JSON summary** (not a full transcript) so the parent context stays small.
+The worker may call `run_subtask` with a goal. A child agent runs with read/search tools only, tighter step limits, and returns a **compact evidence pack** (summary, paths, claims, open questions) — not a full transcript.
+
+### Multi-agent teams
+
+For complex tasks, the worker may call `run_team`. A **director** (orchestrator) assigns goals to **researcher / coder / reviewer** workers (parallel by default); a **synthesizer** merges results into one answer. Workers are read-only; the parent agent applies edits.
+
+### Stuck detector
+
+The harness fingerprints recent tool calls (name + args + result). If it sees 4× identical success, 4× identical error, or a 6-step A/B alternation, it injects a one-time `[SYSTEM — STUCK DETECTOR]` hint before the next LLM step. REPL shows `⚠ stuck: …`.
 
 ### Permissions
 
@@ -234,7 +244,7 @@ cozmo config --show    # secrets masked
 | `cozmo config` | Paths / show JSON |
 | `cozmo index` | Force re-index |
 | `cozmo doctor` | Diagnose effective settings |
-| `cozmo eval` | Golden cases against fixture / live |
+| `cozmo eval` | Golden agent cases + groundedness/citation eval (stub by default) |
 | `cozmo --version` | Print version |
 
 Common flags: `-w / --workdir`, `-p / --provider`, `--model`, `-m / --message`, `--no-index`.
