@@ -1,4 +1,5 @@
 # Cozmo
+<img width="1920" height="1030" alt="Screenshot 2026-11-04 at 14 27 30" src="https://github.com/user-attachments/assets/640dc42d-e9b0-42b7-a5d3-b981a5ce7e8f" />
 
 **Local-first CLI coding agent** for your repository.
 
