@@ -12,15 +12,14 @@ _PRICE_PER_1M: dict[str, tuple[float, float]] = {
     "gpt-4.1": (2.00, 8.00),
 }
 
+
 def estimate_cost_usd(model: str, usage: Usage) -> float | None:
     """
     Return estimated USD, 0.0 for local/unknown-free, or None if priced but no tokens.
     """
     key = model.strip().lower()
     # Local / stub - no cloud bill
-    if key.startswith("stub") or ":" in key or key.startswith("llama") or key.startswith(
-        "qwen"
-    ):
+    if ":" in key or key.startswith(("stub", "llama", "qwen")):
         return 0.0
 
     rates = _PRICE_PER_1M.get(key)
@@ -33,6 +32,7 @@ def estimate_cost_usd(model: str, usage: Usage) -> float | None:
     return (usage.prompt_tokens / 1_000_000) * in_rate + (
         usage.completion_tokens / 1_000_000
     ) * out_rate
+
 
 def format_cost_line(
     *,

@@ -34,9 +34,7 @@ def test_lexical_reranker_prefers_whitespace_insensitive_match() -> None:
 def test_context_expand_surrounding_lines() -> None:
     sources = {
         "math_utils.py": (
-            "# bug: off-by-one on purpose for agent demos\n"
-            "def add(a, b):\n"
-            "    return a - b\n"
+            "# bug: off-by-one on purpose for agent demos\ndef add(a, b):\n    return a - b\n"
         )
     }
     hits = [
@@ -58,12 +56,7 @@ def test_pipeline_vector_only_reranks_and_expands() -> None:
     embedder = StubEmbedder(dim=64)
     store = VectorStore()
     sources = {
-        "math_utils.py": (
-            "# header\n"
-            "def add(a, b):\n"
-            "    return a - b\n"
-            "# footer\n"
-        ),
+        "math_utils.py": ("# header\ndef add(a, b):\n    return a - b\n# footer\n"),
         "other.py": "def hello():\n    return 'hi'\n",
     }
     store.add(

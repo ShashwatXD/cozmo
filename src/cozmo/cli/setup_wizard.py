@@ -12,6 +12,7 @@ from cozmo.infra.config.paths import user_config_path
 from cozmo.infra.config.store import example_config, load_user_config, save_user_config
 from cozmo.infra.llm.model_catalog import validate_and_list
 
+
 def _write_example(directory: Path) -> None:
     import json
 
@@ -20,6 +21,7 @@ def _write_example(directory: Path) -> None:
         json.dumps(example_config(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
 
 def _pick_model(
     provider: str,
@@ -55,6 +57,7 @@ def _pick_model(
     if picked == "__manual__":
         return typer.prompt("Model id", default=previous or choices[0][0]).strip()
     return picked
+
 
 def run_setup(*, non_interactive: bool = False) -> Path:
     existing = load_user_config()
@@ -128,9 +131,7 @@ def run_setup(*, non_interactive: bool = False) -> Path:
             default = prev if prev in catalog.models else catalog.models[0]
             picked = ux.select("Model", choices, default=default)
             data["model"] = (
-                typer.prompt("Model", default=default).strip()
-                if picked == "__manual__"
-                else picked
+                typer.prompt("Model", default=default).strip() if picked == "__manual__" else picked
             )
         else:
             ux.print_err(catalog.error or "No models")

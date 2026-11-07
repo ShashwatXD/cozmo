@@ -43,9 +43,7 @@ def _build_inner(settings: Settings) -> LLMClient:
 
     if settings.provider in _OPENAI_COMPAT:
         if not settings.api_key:
-            raise ValueError(
-                f"COZMO_API_KEY is required when provider={settings.provider}"
-            )
+            raise ValueError(f"COZMO_API_KEY is required when provider={settings.provider}")
         return OpenAICompatibleClient(
             model=settings.model,
             api_key=settings.api_key,

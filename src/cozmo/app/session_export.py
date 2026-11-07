@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from cozmo.domain.events import EventKind, SessionEvent
@@ -80,7 +80,7 @@ def export_session_markdown(
             reason = event.data.get("reason") or "?"
             steps = event.data.get("steps")
             extra = f" steps={steps}" if steps is not None else ""
-            lines.append(f"### Stopped")
+            lines.append("### Stopped")
             lines.append(f"reason={reason}{extra}")
             lines.append("")
         elif event.kind == EventKind.SUBAGENT:
@@ -99,8 +99,6 @@ def _from_start(events: list[SessionEvent], key: str) -> Any:
 
 def _fmt_ts(ts: float | int | str) -> str:
     try:
-        return datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        return datetime.fromtimestamp(float(ts), tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     except (TypeError, ValueError, OSError):
         return str(ts)

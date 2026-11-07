@@ -44,11 +44,15 @@ dependencies = [
     "rich>=13.0",
     "httpx>=0.27",
     "chromadb>=0.5",
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
     "build>=1.2",
     "twine>=5.0",
 ]
@@ -70,3 +74,66 @@ packages = ["src/cozmo"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--strict-markers"
+markers = [
+    "bench: retrieval / latency benchmarks (opt-in, slower)",
+]
+
+[tool.coverage.run]
+source = ["cozmo"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle / pyflakes
+    "I",             # isort
+    "UP",            # pyupgrade
+    "B",             # bugbear
+    "SIM",           # simplify
+    "PIE", "PERF",   # misc + performance
+    "RUF",           # ruff-specific
+    "BLE",           # blind except
+    "S110", "S112",  # silent except
+]
+ignore = [
+    "B008",     # typer.Option(...) in defaults is the Typer idiom
+    "E501",     # handled by the formatter
+    "RUF001",   # intentional unicode glyphs in CLI output
+    "RUF002",
+    "RUF003",
+    "UP042",    # keep (str, Enum): StrEnum changes str() semantics
+    "SIM105",   # explicit try/except reads clearer for OSError cleanup
+    "SIM108",
+    "PERF401",
+    "PERF403",
+    "PERF102",  # false positive: VectorStore.items() is not a dict
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["BLE", "S110", "S112"]
+# Rich rendering falls back to plain output on any terminal error, by design.
+"src/cozmo/cli/**" = ["BLE001", "S110"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/cozmo"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true

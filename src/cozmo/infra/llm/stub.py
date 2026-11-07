@@ -8,6 +8,7 @@ from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.tools import ToolCall, ToolSpec
 
+
 class StubLLMClient:
     """
 
@@ -78,6 +79,7 @@ class StubLLMClient:
         result = self.complete(messages, temperature=temperature)
         for word in (result.content or "ok").split(" "):
             yield word + " "
+
 
 def _messages_since_last_user(messages: list[Message]) -> list[Message]:
     last_user = -1

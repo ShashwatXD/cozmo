@@ -188,8 +188,7 @@ def _read_file_ranged(path: Path, args: dict[str, Any], display_path: str) -> st
         if len(text) <= max_full_chars:
             return text
         return (
-            text[:max_full_chars]
-            + f"\n...[truncated; file has {total} lines / {len(text)} chars; "
+            text[:max_full_chars] + f"\n...[truncated; file has {total} lines / {len(text)} chars; "
             "pass start_line/end_line or around_line]"
         )
 
@@ -230,9 +229,7 @@ def build_default_registry(
         glob = str(args.get("glob") or "")
         max_hits = _as_int(args.get("max_hits")) or 40
         max_hits = max(1, min(max_hits, 200))
-        return run_search_repo(
-            guard.workdir, query, glob=glob, max_hits=max_hits
-        )
+        return run_search_repo(guard.workdir, query, glob=glob, max_hits=max_hits)
 
     def run_shell(args: dict[str, Any]) -> str:
         guard.require_shell()
@@ -244,6 +241,7 @@ def build_default_registry(
             capture_output=True,
             text=True,
             timeout=shell_timeout_s,
+            check=False,
         )
         out = (proc.stdout or "") + (proc.stderr or "")
         return f"exit={proc.returncode}\n{out}"
@@ -260,10 +258,7 @@ def build_default_registry(
 
     def semantic_search(args: dict[str, Any]) -> str:
         if vector_store is None or embedder is None or len(vector_store) == 0:
-            return (
-                "No RAG index loaded. Run: cozmo index -w <workdir> "
-                "then retry semantic_search."
-            )
+            return "No RAG index loaded. Run: cozmo index -w <workdir> then retry semantic_search."
         top_k = int(args.get("top_k") or 10)
         from cozmo.search.pipeline import RetrievalPipeline
 
@@ -280,9 +275,7 @@ def build_default_registry(
         lines: list[str] = []
         for h in hits:
             preview = h.text[:800]
-            lines.append(
-                f"score={h.score:.3f} {h.path}:{h.start_line}-{h.end_line}\n{preview}"
-            )
+            lines.append(f"score={h.score:.3f} {h.path}:{h.start_line}-{h.end_line}\n{preview}")
         return "\n---\n".join(lines)
 
     def search_history(args: dict[str, Any]) -> str:
@@ -313,6 +306,7 @@ def _git(cwd: Path, args: list[str]) -> str:
         capture_output=True,
         text=True,
         timeout=30,
+        check=False,
     )
     out = (proc.stdout or "") + (proc.stderr or "")
     if proc.returncode != 0 and not out:

@@ -27,7 +27,7 @@ class SessionHistory:
         self.session_id = session_id or new_session_id()
         self._rag_index = rag_index
 
-    def emit(self, kind: EventKind, **data: Any) -> SessionEvent:
+    def emit(self, kind: EventKind, /, **data: Any) -> SessionEvent:
         event = SessionEvent(kind=kind, session_id=self.session_id, data=dict(data))
         self._store.append(event)
         self._maybe_index(event)

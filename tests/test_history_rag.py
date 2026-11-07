@@ -61,9 +61,7 @@ def test_search_history_tool_registered(tmp_path: Path) -> None:
     from cozmo.infra.tools.registry import ToolExecutor
 
     ex = ToolExecutor(reg)
-    tr = ex.execute(
-        ToolCall(id="1", name="search_history", arguments='{"query":"permission"}')
-    )
+    tr = ex.execute(ToolCall(id="1", name="search_history", arguments='{"query":"permission"}'))
     assert not tr.is_error
     assert "permission" in tr.content.lower() or "shell" in tr.content.lower()
 
@@ -73,9 +71,7 @@ def test_catch_up_from_existing_jsonl(tmp_path: Path) -> None:
     sid = "deadbeefcafe"
     # Write without going through SessionHistory rag
     store.append(
-        SessionEvent(
-            kind=EventKind.SESSION_START, session_id=sid, data={"workdir": str(tmp_path)}
-        )
+        SessionEvent(kind=EventKind.SESSION_START, session_id=sid, data={"workdir": str(tmp_path)})
     )
     store.append(
         SessionEvent(

@@ -10,6 +10,7 @@ from cozmo.app.compaction import compact_memory, needs_compaction
 from cozmo.app.history import SessionHistory
 from cozmo.app.model_router import ModelRouter
 from cozmo.app.permissions import PermissionGate
+from cozmo.app.stuck_detector import detect_stuck, step_from_tool_call
 from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.cost import estimate_cost_usd
 from cozmo.domain.guardrails import AgentPolicy, StopReason
@@ -21,7 +22,6 @@ from cozmo.domain.tools import ToolResult
 from cozmo.infra.mcp.types import is_mcp_tool
 from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools.registry import ToolExecutor, ToolRegistry
-from cozmo.app.stuck_detector import detect_stuck, step_from_tool_call
 from cozmo.prompts.loader import load_system_prompt
 
 
@@ -91,9 +91,7 @@ class AgentRunner:
         self._permission_gate = permission_gate
         if self._permission_gate is not None:
             self._permission_gate.set_mode(mode)
-        self._system_prompt = system_prompt or load_system_prompt(
-            prompt_name_for_mode(mode)
-        )
+        self._system_prompt = system_prompt or load_system_prompt(prompt_name_for_mode(mode))
         self._temperature = temperature
         self._model_name = model_name
         self._depth = depth
@@ -216,9 +214,7 @@ class AgentRunner:
                 yield AgentEvent(kind="assistant", text=result.content)
 
             if not result.has_tool_calls:
-                messages.append(
-                    Message(role=Role.ASSISTANT, content=result.content or "")
-                )
+                messages.append(Message(role=Role.ASSISTANT, content=result.content or ""))
                 self._commit_memory(messages)
                 text = result.content or ""
                 self.last_result = AgentResult(
@@ -261,9 +257,7 @@ class AgentRunner:
                 )
                 t1 = time.perf_counter()
                 tool_result = self._execute_gated(call)
-                if tool_result.is_error and tool_result.content.startswith(
-                    "Permission denied"
-                ):
+                if tool_result.is_error and tool_result.content.startswith("Permission denied"):
                     yield AgentEvent(
                         kind="permission",
                         text=tool_result.content,
@@ -338,11 +332,7 @@ class AgentRunner:
     def _tool_specs_for_mode(self) -> list:
         specs = self._registry.specs()
         if self._mode in READ_ONLY_MODES:
-            return [
-                s
-                for s in specs
-                if s.name not in MUTATING_TOOLS and not is_mcp_tool(s.name)
-            ]
+            return [s for s in specs if s.name not in MUTATING_TOOLS and not is_mcp_tool(s.name)]
         return specs
 
     def _execute_gated(self, call) -> ToolResult:
@@ -392,6 +382,4 @@ class AgentRunner:
         yield AgentEvent(kind="done", text=text)
 
     def _commit_memory(self, messages: list[Message]) -> None:
-        self._memory.replace_history(
-            [m for m in messages if m.role != Role.SYSTEM]
-        )
+        self._memory.replace_history([m for m in messages if m.role != Role.SYSTEM])

@@ -102,7 +102,6 @@ def test_project_config_overrides_user(monkeypatch, tmp_path: Path) -> None:
     user.parent.mkdir(parents=True)
     user.write_text(json.dumps({"provider": "ollama", "model": "from-user"}), encoding="utf-8")
 
-    proj = tmp_path / ".cozmo" / "config.json"
     # same path as user when HOME==cwd — use nested project instead
     proj_root = tmp_path / "repo"
     proj_root.mkdir()

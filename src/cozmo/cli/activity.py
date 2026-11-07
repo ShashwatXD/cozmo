@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from cozmo.cli import theme
+
+if TYPE_CHECKING:
+    from rich.console import Console
+    from rich.status import Status
 
 # Square OLED eyes — same mascot language as cli/face.py
 _EYE_FRAMES: tuple[str, ...] = (
@@ -59,10 +65,10 @@ class Activity:
     """Cyan Rich Status with Cozmo eye / logo spinners."""
 
     def __init__(self) -> None:
-        self._status = None
-        self._console = None
+        self._status: Status | None = None
+        self._console: Console | None = None
 
-    def __enter__(self) -> "Activity":
+    def __enter__(self) -> Activity:
         self.start()
         return self
 

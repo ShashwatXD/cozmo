@@ -3,4 +3,4 @@
 from cozmo.infra.rag.indexer import RepoIndexer
 from cozmo.infra.rag.store import JsonVectorStore, VectorStore
 
-__all__ = ["RepoIndexer", "JsonVectorStore", "VectorStore"]
+__all__ = ["JsonVectorStore", "RepoIndexer", "VectorStore"]

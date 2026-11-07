@@ -4,6 +4,7 @@ from pathlib import Path
 
 _PROMPTS_DIR = Path(__file__).resolve().parent
 
+
 def load_system_prompt(name: str = "default") -> str:
     path = _PROMPTS_DIR / f"{name}.txt"
     if not path.exists():

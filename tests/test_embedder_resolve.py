@@ -23,15 +23,13 @@ def test_auto_ollama_uses_local_semantic() -> None:
 
 
 def test_auto_stub_uses_stub_embedder() -> None:
-    backend, model = resolve_embedder(Settings(provider="stub", embedder="auto"))
+    backend, _model = resolve_embedder(Settings(provider="stub", embedder="auto"))
     assert backend == "stub"
     assert isinstance(build_embedder(Settings(provider="stub")), StubEmbedder)
 
 
 def test_explicit_stub_honored() -> None:
-    backend, _ = resolve_embedder(
-        Settings(provider="openai", api_key="sk", embedder="stub")
-    )
+    backend, _ = resolve_embedder(Settings(provider="openai", api_key="sk", embedder="stub"))
     assert backend == "stub"
 
 
@@ -41,7 +39,5 @@ def test_openai_without_key_raises() -> None:
 
 
 def test_build_openai_embedder() -> None:
-    emb = build_embedder(
-        Settings(provider="openai", api_key="sk-test", embedder="openai")
-    )
+    emb = build_embedder(Settings(provider="openai", api_key="sk-test", embedder="openai"))
     assert isinstance(emb, OpenAICompatibleEmbedder)

@@ -72,9 +72,7 @@ def detect_stuck(steps: list[StuckStep]) -> StuckVerdict:
         window = recent[-THRESHOLDS["action_error"] :]
         first = window[0]
         if all(
-            s.tool_name == first.tool_name
-            and s.args_key == first.args_key
-            and s.is_error
+            s.tool_name == first.tool_name and s.args_key == first.args_key and s.is_error
             for s in window
         ):
             return StuckVerdict(
@@ -115,8 +113,7 @@ def detect_stuck(steps: list[StuckStep]) -> StuckVerdict:
             for i, s in enumerate(window)
             if i >= 2
         ) and not (
-            window[0].tool_name == window[1].tool_name
-            and window[0].args_key == window[1].args_key
+            window[0].tool_name == window[1].tool_name and window[0].args_key == window[1].args_key
         )
         if alt:
             return StuckVerdict(

@@ -99,6 +99,5 @@ def _rule_to_dict(rule: PermissionRule) -> dict[str, str]:
 
 def _has_rule(rules: list[PermissionRule], rule: PermissionRule) -> bool:
     return any(
-        r.tool == rule.tool and r.path == rule.path and r.pattern == rule.pattern
-        for r in rules
+        r.tool == rule.tool and r.path == rule.path and r.pattern == rule.pattern for r in rules
     )

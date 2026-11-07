@@ -18,7 +18,7 @@ def _contexts() -> list[GroundingContext]:
             end_line=240,
             content=(
                 'const insert = sqlite.prepare("INSERT INTO rag_chunks '
-                '(id, path, start_line, end_line, content, embedding_json, indexed_at) '
+                "(id, path, start_line, end_line, content, embedding_json, indexed_at) "
                 'VALUES (?, ?, ?, ?, ?, ?, ?)");'
             ),
         ),
@@ -54,8 +54,7 @@ def test_supported_claim() -> None:
 def test_unsupported_claim() -> None:
     report = score_groundedness(
         answer=(
-            "Vectors are sharded across a Redis cluster using HNSW graphs "
-            "for approximate search."
+            "Vectors are sharded across a Redis cluster using HNSW graphs for approximate search."
         ),
         contexts=_contexts(),
     )
@@ -70,9 +69,7 @@ def test_empty_claims_score_zero() -> None:
 
 
 def test_extract_citations() -> None:
-    found = extract_citations(
-        "See server/src/rag/retrieve.ts:20-55 and server/src/rag/indexer.ts."
-    )
+    found = extract_citations("See server/src/rag/retrieve.ts:20-55 and server/src/rag/indexer.ts.")
     assert len(found) == 2
     assert found[0].start_line == 20
     assert found[0].end_line == 55

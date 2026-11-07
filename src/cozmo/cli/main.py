@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import UTC
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 
@@ -19,6 +20,8 @@ from cozmo.app.model_router import build_llm_bundle
 from cozmo.app.permissions import PermissionChoice, PermissionGate
 from cozmo.app.subagent import SubAgentService, register_subagent_tool
 from cozmo.app.team import TeamService, register_team_tool
+from cozmo.cli import ux
+from cozmo.cli.setup_wizard import run_setup
 from cozmo.domain.completion import Usage
 from cozmo.domain.cost import format_cost_line
 from cozmo.domain.guardrails import AgentPolicy
@@ -31,8 +34,6 @@ from cozmo.infra.config.paths import (
     user_config_path,
     workspace_dir,
 )
-from cozmo.cli import ux
-from cozmo.cli.setup_wizard import run_setup
 from cozmo.infra.config.store import load_user_config, save_user_config
 from cozmo.infra.history import HistoryRagIndex, JsonlEventStore
 from cozmo.infra.history.null import NullEventStore
@@ -55,10 +56,11 @@ app = typer.Typer(
     add_completion=False,
 )
 
+
 def _apply_provider(
     settings: Settings,
-    provider: Optional[str],
-    model: Optional[str],
+    provider: str | None,
+    model: str | None,
 ) -> Settings:
     data = settings.model_dump()
     if provider:
@@ -66,6 +68,7 @@ def _apply_provider(
     if model:
         data["model"] = model
     return Settings(**data)
+
 
 def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
     return {
@@ -103,6 +106,7 @@ def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
         "mcp_servers": [s.model_dump() for s in settings.mcp_servers],
     }
 
+
 def _ensure_config() -> None:
     if user_config_path().is_file():
         return
@@ -117,10 +121,11 @@ def _ensure_config() -> None:
         return
     run_setup(non_interactive=False)
 
+
 def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -> None:
     try:
         embedder = build_embedder(settings)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         typer.secho(
             f"indexing skipped: cannot build embedder ({exc})",
             fg="yellow",
@@ -177,6 +182,7 @@ def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -
             fg="yellow",
         )
 
+
 def _ensure_index(root_dir: Path, settings: Settings, *, auto_index: bool) -> None:
     if not auto_index:
         return
@@ -202,14 +208,15 @@ def _sources_from_store(root_dir: Path, store: Any) -> dict[str, str]:
             pass
     return sources
 
+
 def _run_agent_session(
     *,
     settings: Settings,
     root_dir: Path,
-    message: Optional[str],
+    message: str | None,
     auto_index: bool = True,
     mode: AgentMode = AgentMode.AGENT,
-    resume_session_id: Optional[str] = None,
+    resume_session_id: str | None = None,
 ) -> None:
     _ensure_index(root_dir, settings, auto_index=auto_index)
 
@@ -264,9 +271,7 @@ def _run_agent_session(
         n = register_mcp_tools(registry, mcp_manager)
         if n:
             ux.print_dim(f"mcp: registered {n} tool(s) from {len(mcp_manager.tools)} listed")
-    executor = ToolExecutor(
-        registry, max_chars=settings.max_tool_result_chars
-    )
+    executor = ToolExecutor(registry, max_chars=settings.max_tool_result_chars)
     models = build_llm_bundle(settings)
     memory = ConversationMemory(max_messages=settings.memory_max_messages)
     trace_path = root_dir / ".cozmo" / "traces.jsonl"
@@ -420,7 +425,7 @@ def _run_agent_session(
             if raw in {"/sessions", "/history"}:
                 _print_sessions(history)
                 continue
-            if raw.startswith("/continue") or raw.startswith("/resume"):
+            if raw.startswith(("/continue", "/resume")):
                 parts = raw.split(maxsplit=1)
                 sid = parts[1].strip() if len(parts) > 1 else None
                 if not sid:
@@ -468,7 +473,7 @@ def _resume_into(
 
 
 def _print_sessions(history: SessionHistory) -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     rows = history.list_recent_sessions(limit=15)
     if not rows:
@@ -480,9 +485,7 @@ def _print_sessions(history: SessionHistory) -> None:
         preview = (row.get("preview") or "").strip() or "—"
         ts = row.get("started_at")
         try:
-            when = datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime(
-                "%Y-%m-%d %H:%M"
-            )
+            when = datetime.fromtimestamp(float(ts or ""), tz=UTC).strftime("%Y-%m-%d %H:%M")
         except (TypeError, ValueError, OSError):
             when = str(ts or "?")
         typer.echo(f"  {sid}  {when}  model={model}")
@@ -567,26 +570,20 @@ def _make_permission_asker(activity_holder: dict[str, Any]):
 def root(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", help="Show version"),
-    message: Optional[str] = typer.Option(
-        None, "--message", "-m", help="One-shot task (skip REPL)"
-    ),
-    workdir: Optional[Path] = typer.Option(
-        None, "--workdir", "-w", help="Repo root (default: cwd)"
-    ),
-    provider: Optional[str] = typer.Option(
+    message: str | None = typer.Option(None, "--message", "-m", help="One-shot task (skip REPL)"),
+    workdir: Path | None = typer.Option(None, "--workdir", "-w", help="Repo root (default: cwd)"),
+    provider: str | None = typer.Option(
         None, "--provider", "-p", help="stub | openai | anthropic | openrouter | ollama"
     ),
-    model: Optional[str] = typer.Option(None, "--model", help="Model id"),
-    no_index: bool = typer.Option(
-        False, "--no-index", help="Skip auto-index on first launch"
-    ),
+    model: str | None = typer.Option(None, "--model", help="Model id"),
+    no_index: bool = typer.Option(False, "--no-index", help="Skip auto-index on first launch"),
     plan: bool = typer.Option(
         False, "--plan", help="Start in plan mode (explore only; no write/shell)"
     ),
     ask: bool = typer.Option(
         False, "--ask", help="Start in ask mode (explain only; no write/shell)"
     ),
-    continue_session: Optional[str] = typer.Option(
+    continue_session: str | None = typer.Option(
         None,
         "--continue",
         help="Resume a session id (use '' / omit value via /continue in REPL)",
@@ -611,15 +608,16 @@ def root(
         resume_session_id=continue_session,
     )
 
+
 @app.command("chat")
 def chat(
-    message: Optional[str] = typer.Option(None, "--message", "-m"),
+    message: str | None = typer.Option(None, "--message", "-m"),
     stream: bool = typer.Option(True, "--stream/--no-stream"),
     json_mode: bool = typer.Option(False, "--json"),
-    provider: Optional[str] = typer.Option(
+    provider: str | None = typer.Option(
         None, "--provider", "-p", help="stub | openai | anthropic | openrouter | ollama"
     ),
-    model: Optional[str] = typer.Option(None, "--model", help="Model id override"),
+    model: str | None = typer.Option(None, "--model", help="Model id override"),
 ) -> None:
     """Plain chat (no tools). Multi-turn when -m is omitted."""
     settings = _apply_provider(load_settings(), provider, model)
@@ -629,9 +627,7 @@ def chat(
     typer.secho(f"provider={settings.provider} model={settings.model}", fg="bright_black")
 
     if message is not None:
-        _chat_once(
-            use_case, message, stream=stream, json_mode=json_mode, settings=settings
-        )
+        _chat_once(use_case, message, stream=stream, json_mode=json_mode, settings=settings)
         return
 
     typer.secho("chat REPL - /exit /clear", fg="bright_black")
@@ -649,14 +645,15 @@ def chat(
         _chat_once(use_case, text, stream=stream, json_mode=False, settings=settings)
         typer.secho(f"[memory messages={len(memory)}]", fg="bright_black")
 
+
 @app.command("agent")
 def agent(
-    message: Optional[str] = typer.Option(None, "--message", "-m"),
-    workdir: Optional[Path] = typer.Option(None, "--workdir", "-w"),
-    provider: Optional[str] = typer.Option(
+    message: str | None = typer.Option(None, "--message", "-m"),
+    workdir: Path | None = typer.Option(None, "--workdir", "-w"),
+    provider: str | None = typer.Option(
         None, "--provider", "-p", help="stub | openai | anthropic | openrouter | ollama"
     ),
-    model: Optional[str] = typer.Option(None, "--model", help="Model id override"),
+    model: str | None = typer.Option(None, "--model", help="Model id override"),
     no_index: bool = typer.Option(False, "--no-index"),
     plan: bool = typer.Option(
         False, "--plan", help="Start in plan mode (explore only; no write/shell)"
@@ -677,10 +674,11 @@ def agent(
         mode=_resolve_mode(ask=ask, plan=plan),
     )
 
+
 @app.command("index")
 def index_cmd(
-    workdir: Optional[Path] = typer.Option(None, "--workdir", "-w"),
-    embedder_name: Optional[str] = typer.Option(
+    workdir: Path | None = typer.Option(None, "--workdir", "-w"),
+    embedder_name: str | None = typer.Option(
         None,
         "--embedder",
         help="openai | ollama | stub (overrides COZMO_EMBEDDER)",
@@ -695,9 +693,10 @@ def index_cmd(
     root_dir = (workdir or Path.cwd()).resolve()
     _build_indexes(root_dir, settings, quiet=False)
 
+
 @app.command("eval")
 def eval_cmd(
-    workdir: Optional[Path] = typer.Option(
+    workdir: Path | None = typer.Option(
         None,
         "--workdir",
         "-w",
@@ -727,11 +726,10 @@ def eval_cmd(
     typer.echo(f"\n{passed}/{len(results)} passed")
     if grounded:
         typer.echo(f"  golden: {sum(1 for r in golden if r.passed)}/{len(golden)}")
-        typer.echo(
-            f"  groundedness: {sum(1 for r in grounded if r.passed)}/{len(grounded)}"
-        )
+        typer.echo(f"  groundedness: {sum(1 for r in grounded if r.passed)}/{len(grounded)}")
     if passed != len(results):
         raise typer.Exit(code=1)
+
 
 @app.command("setup")
 def setup_cmd(
@@ -747,6 +745,7 @@ def setup_cmd(
     if non_interactive:
         typer.secho(f"Wrote {path}", fg="green")
         typer.secho("Edit it anytime, or run: cozmo config", fg="bright_black")
+
 
 @app.command("config")
 def config_cmd(
@@ -781,7 +780,9 @@ def config_cmd(
                 "max_agent_steps": 8,
                 "embedder": "auto",
             }
-            proj_path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            proj_path.write_text(
+                json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
             typer.secho(f"Created {proj_path}", fg="green")
         else:
             typer.secho(f"Already exists: {proj_path}", fg="yellow")
@@ -796,7 +797,9 @@ def config_cmd(
     typer.echo(f"  global:  {user_path}")
     typer.echo(f"           ({'exists' if user_path.is_file() else 'missing'})")
     typer.echo(f"  project: {proj_path}")
-    typer.echo(f"           ({'exists' if proj_path.is_file() else 'optional — cozmo config --project'})")
+    typer.echo(
+        f"           ({'exists' if proj_path.is_file() else 'optional — cozmo config --project'})"
+    )
     typer.echo("")
     typer.secho(
         "Load order: CLI > COZMO_* env > cwd .env > project config > global config > defaults",
@@ -804,10 +807,10 @@ def config_cmd(
     )
     typer.echo("")
     typer.echo("Examples:")
-    typer.echo('  nano ~/.cozmo/config.json')
-    typer.echo('  cozmo config --show')
-    typer.echo('  cozmo config --project   # create per-repo overrides')
-    typer.echo('  cozmo setup              # interactive re-configure')
+    typer.echo("  nano ~/.cozmo/config.json")
+    typer.echo("  cozmo config --show")
+    typer.echo("  cozmo config --project   # create per-repo overrides")
+    typer.echo("  cozmo setup              # interactive re-configure")
 
     if show and user_path.is_file():
         data = load_user_config(user_path)
@@ -818,6 +821,7 @@ def config_cmd(
         if proj_path.is_file():
             typer.echo("\n--- project config ---")
             typer.echo(proj_path.read_text(encoding="utf-8"))
+
 
 @app.command("doctor")
 def doctor_cmd() -> None:
@@ -832,14 +836,8 @@ def doctor_cmd() -> None:
 
     typer.echo(f"version:          {__version__}")
     typer.echo(f"user config dir:  {cfg_dir}")
-    typer.echo(
-        f"global config:    {cfg_path} "
-        f"({'exists' if cfg_path.is_file() else 'missing'})"
-    )
-    typer.echo(
-        f"project config:   {proj} "
-        f"({'exists' if proj.is_file() else 'none'})"
-    )
+    typer.echo(f"global config:    {cfg_path} ({'exists' if cfg_path.is_file() else 'missing'})")
+    typer.echo(f"project config:   {proj} ({'exists' if proj.is_file() else 'none'})")
     typer.echo(f"cwd .env:         {cwd_env} ({'exists' if cwd_env.is_file() else 'none'})")
     typer.echo(f"workdir:          {work}")
     typer.echo(f"workspace data:   {ws}/")
@@ -864,6 +862,7 @@ def doctor_cmd() -> None:
     typer.secho("Edit config:  cozmo config", fg="cyan")
     typer.secho("Start agent:  cozmo", fg="cyan")
 
+
 def _chat_once(
     use_case: ChatUseCase,
     text: str,
@@ -885,6 +884,7 @@ def _chat_once(
     result = use_case.run(text)
     typer.echo(result.content)
     _print_meter(settings.provider, settings.model, result.usage)
+
 
 def _friendly_llm_error(exc: BaseException, settings: Settings) -> str:
     name = type(exc).__name__
@@ -950,9 +950,7 @@ def _agent_once(
                 act.tool(event.tool_name)
             elif event.kind == "tool_result":
                 act.stop()
-                preview = (
-                    event.text if len(event.text) < 120 else event.text[:120] + "…"
-                )
+                preview = event.text if len(event.text) < 120 else event.text[:120] + "…"
                 typer.secho(
                     f"  ✓ {event.tool_name}  {preview}",
                     fg="bright_black",
@@ -970,7 +968,7 @@ def _agent_once(
                 act.stop()
                 if event.text:
                     typer.echo(event.text)
-    except Exception as exc:  # noqa: BLE001 — surface as UX, don't dump traceback
+    except Exception as exc:
         from cozmo.cli import ux as _ux
 
         act.stop()
@@ -993,6 +991,7 @@ def _agent_once(
             f"steps={result.steps} stop={result.stop_reason.value} mode={runner.mode.value}",
             fg="bright_black",
         )
+
 
 def _print_meter(
     provider: str,
@@ -1017,5 +1016,7 @@ def _print_meter(
             bits.append("compacted")
     if bits:
         typer.secho("\n" + " · ".join(bits), fg="bright_black")
+
+
 if __name__ == "__main__":
     app()

@@ -89,7 +89,7 @@ GROUNDEDNESS_CASES: list[GroundednessCase] = [
                 end_line=240,
                 content=(
                     'const insert = sqlite.prepare("INSERT INTO rag_chunks '
-                    '(id, path, start_line, end_line, content, embedding_json, indexed_at) '
+                    "(id, path, start_line, end_line, content, embedding_json, indexed_at) "
                     'VALUES (?, ?, ?, ?, ?, ?, ?)");'
                 ),
             ),
@@ -108,15 +108,14 @@ GROUNDEDNESS_CASES: list[GroundednessCase] = [
     GroundednessCase(
         id="unsupported_claim",
         answer=(
-            "Vectors are sharded across a Redis cluster using HNSW graphs "
-            "for approximate search."
+            "Vectors are sharded across a Redis cluster using HNSW graphs for approximate search."
         ),
         contexts=(
             GroundingContext(
                 path="server/src/rag/indexer.ts",
                 start_line=200,
                 end_line=240,
-                content='INSERT INTO rag_chunks (id, path, embedding_json)',
+                content="INSERT INTO rag_chunks (id, path, embedding_json)",
             ),
         ),
         min_score=0,
@@ -176,9 +175,7 @@ def _collect_contexts_from_memory(memory: ConversationMemory) -> list[GroundingC
             name_args = pending_calls.get(msg.tool_call_id)
             if name_args:
                 name, args = name_args
-                contexts.extend(
-                    contexts_from_tool_results(name, args, msg.content)
-                )
+                contexts.extend(contexts_from_tool_results(name, args, msg.content))
     return contexts
 
 
@@ -195,7 +192,7 @@ def run_golden_eval(
             if live:
                 llm = build_llm(settings)
             else:
-                calls = ()
+                calls: tuple[ToolCall, ...] = ()
                 if case.scripted_tool:
                     calls = (
                         ToolCall(
@@ -204,9 +201,7 @@ def run_golden_eval(
                             arguments=json.dumps(case.scripted_args or {}),
                         ),
                     )
-                llm = StubLLMClient(
-                    scripted_tool_calls=calls, final_text=case.final_text
-                )
+                llm = StubLLMClient(scripted_tool_calls=calls, final_text=case.final_text)
             guard = WorkspaceGuard(workdir, allow_write=False, allow_shell=False)
             reg = build_default_registry(guard)
             runner = AgentRunner(
@@ -220,12 +215,12 @@ def run_golden_eval(
             detail = (out.final_text or "")[:200]
             ok = True
 
-            if case.expect_substring:
-                if case.expect_substring.lower() not in (out.final_text or "").lower():
-                    ok = False
-                    detail = (
-                        f"missing {case.expect_substring!r} in {out.final_text!r}"
-                    )
+            if (
+                case.expect_substring
+                and case.expect_substring.lower() not in (out.final_text or "").lower()
+            ):
+                ok = False
+                detail = f"missing {case.expect_substring!r} in {out.final_text!r}"
 
             if case.min_groundedness is not None:
                 contexts = _collect_contexts_from_memory(runner.memory)
@@ -243,9 +238,7 @@ def run_golden_eval(
 
             results.append(EvalResult(case.id, ok, detail, suite="golden"))
         except Exception as exc:  # noqa: BLE001
-            results.append(
-                EvalResult(case.id, False, str(exc), suite="golden")
-            )
+            results.append(EvalResult(case.id, False, str(exc), suite="golden"))
     return results
 
 

@@ -10,7 +10,7 @@ class AgentToolAccess(str, Enum):
     """Which tools a team agent may use."""
 
     NONE = "none"
-    READ = "read"  
+    READ = "read"
     WORKSPACE = "workspace"  # read + write/shell (reserved; workers stay read-only for now)
 
 
