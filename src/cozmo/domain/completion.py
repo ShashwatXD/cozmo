@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from cozmo.domain.tools import ToolCall
 
+
 @dataclass(frozen=True)
 class Usage:
     """Token counts from the provider (0 if unknown / stub)."""
@@ -21,6 +22,7 @@ class Usage:
             completion_tokens=self.completion_tokens + other.completion_tokens,
         )
 
+
 @dataclass(frozen=True)
 class CompletionResult:
     """Full non-stream reply (text and/or tool calls)."""
@@ -33,3 +35,14 @@ class CompletionResult:
     @property
     def has_tool_calls(self) -> bool:
         return len(self.tool_calls) > 0
+
+
+class TransientLLMError(RuntimeError):
+    """Provider failure worth retrying (rate limit, overload, 5xx, network)."""
+
+    def __init__(
+        self, message: str, *, status_code: int | None = None, retry_after_s: float | None = None
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after_s = retry_after_s

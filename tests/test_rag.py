@@ -1,7 +1,9 @@
 """RAG chunking + indexing + search (no network)."""
 
+import json
 from pathlib import Path
 
+from cozmo.domain.tools import ToolCall
 from cozmo.infra.rag.chunking import chunk_text
 from cozmo.infra.rag.embedder import StubEmbedder
 from cozmo.infra.rag.indexer import RepoIndexer
@@ -9,8 +11,6 @@ from cozmo.infra.rag.store import VectorStore, cosine
 from cozmo.infra.tools import build_default_registry
 from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolExecutor
-from cozmo.domain.tools import ToolCall
-import json
 
 
 def test_chunk_text() -> None:

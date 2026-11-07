@@ -36,9 +36,7 @@ def test_read_write_search(tmp_path: Path) -> None:
     read = ToolCall(id="2", name="read_file", arguments=json.dumps({"path": "a.txt"}))
     assert ex.execute(read).content == "hello cozmo"
 
-    search = ToolCall(
-        id="3", name="search_repo", arguments=json.dumps({"query": "cozmo"})
-    )
+    search = ToolCall(id="3", name="search_repo", arguments=json.dumps({"query": "cozmo"}))
     assert "a.txt" in ex.execute(search).content
 
 

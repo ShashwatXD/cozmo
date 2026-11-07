@@ -6,9 +6,9 @@ import httpx
 
 from cozmo.infra.llm.model_catalog import (
     OPENAI_FAVORITES,
-    validate_and_list_openai,
-    validate_and_list_anthropic,
     _merge_favorites,
+    validate_and_list_anthropic,
+    validate_and_list_openai,
 )
 
 

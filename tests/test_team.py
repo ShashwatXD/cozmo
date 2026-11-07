@@ -11,7 +11,7 @@ from cozmo.app.team import (
 )
 from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.guardrails import AgentPolicy
-from cozmo.domain.messages import Message, Role
+from cozmo.domain.messages import Message
 from cozmo.domain.roles import ModelRole
 from cozmo.domain.team import list_default_workers, resolve_agent
 from cozmo.infra.llm.stub import StubLLMClient

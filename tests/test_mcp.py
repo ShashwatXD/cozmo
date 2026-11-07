@@ -56,9 +56,7 @@ def test_register_mcp_tools_with_fake_manager(tmp_path) -> None:
             ]
             self.calls: list[tuple[str, str, dict[str, Any]]] = []
 
-        def call_tool(
-            self, server: str, remote_name: str, arguments: dict[str, Any]
-        ) -> str:
+        def call_tool(self, server: str, remote_name: str, arguments: dict[str, Any]) -> str:
             self.calls.append((server, remote_name, arguments))
             return f"pong:{arguments.get('msg')}"
 
@@ -69,8 +67,9 @@ def test_register_mcp_tools_with_fake_manager(tmp_path) -> None:
     assert n == 1
     assert reg.get("mcp__demo__ping") is not None
     ex = ToolExecutor(reg)
-    from cozmo.domain.tools import ToolCall
     import json
+
+    from cozmo.domain.tools import ToolCall
 
     result = ex.execute(
         ToolCall(
@@ -85,7 +84,6 @@ def test_register_mcp_tools_with_fake_manager(tmp_path) -> None:
 
 
 def test_ask_mode_hides_mcp_tools(tmp_path) -> None:
-    guard = WorkspaceGuard(tmp_path)
     reg = ToolRegistry()
     reg.register(
         ToolSpec(
@@ -96,7 +94,9 @@ def test_ask_mode_hides_mcp_tools(tmp_path) -> None:
         lambda _a: "ok",
     )
     reg.register(
-        ToolSpec(name="read_file", description="r", parameters={"type": "object", "properties": {}}),
+        ToolSpec(
+            name="read_file", description="r", parameters={"type": "object", "properties": {}}
+        ),
         lambda _a: "ok",
     )
     runner = AgentRunner(
@@ -113,8 +113,6 @@ def test_ask_mode_hides_mcp_tools(tmp_path) -> None:
 
 def test_mcp_manager_missing_package_warns() -> None:
     mgr = McpManager()
-    warnings = mgr.connect_servers(
-        [McpServerConfig(name="x", transport="stdio", command="false")]
-    )
+    warnings = mgr.connect_servers([McpServerConfig(name="x", transport="stdio", command="false")])
     # Either missing package or connect failure — both are fail-soft strings
     assert isinstance(warnings, list)

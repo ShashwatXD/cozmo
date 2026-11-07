@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Type
+from typing import Any
 
 from pydantic import AliasChoices, Field
 from pydantic.fields import FieldInfo
@@ -16,11 +16,9 @@ from pydantic_settings import (
 from cozmo.infra.config.store import load_merged_file_config
 from cozmo.infra.mcp.types import McpServerConfig
 
-class _FileJsonSettingsSource(PydanticBaseSettingsSource):
 
-    def get_field_value(
-        self, field: FieldInfo, field_name: str
-    ) -> tuple[Any, str, bool]:
+class _FileJsonSettingsSource(PydanticBaseSettingsSource):
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
         data = load_merged_file_config(Path.cwd())
         if field_name in data:
             return data[field_name], field_name, True
@@ -28,6 +26,7 @@ class _FileJsonSettingsSource(PydanticBaseSettingsSource):
 
     def __call__(self) -> dict[str, Any]:
         return load_merged_file_config(Path.cwd())
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -81,7 +80,7 @@ class Settings(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
@@ -94,6 +93,7 @@ class Settings(BaseSettings):
             _FileJsonSettingsSource(settings_cls),
             file_secret_settings,
         )
+
 
 def load_settings() -> Settings:
     return Settings()

@@ -68,8 +68,8 @@ class McpManager:
             logger.warning("mcp close: %s", exc)
         try:
             loop.call_soon_threadsafe(loop.stop)
-        except Exception:
-            pass
+        except RuntimeError as exc:  # loop already closed
+            logger.debug("mcp loop stop: %s", exc)
         if self._thread is not None:
             self._thread.join(timeout=5)
         self._loop = None
@@ -89,17 +89,13 @@ class McpManager:
         try:
             import mcp  # noqa: F401
         except ImportError:
-            return [
-                "mcp package missing — install with: pip install 'cozmo-agent[mcp]'"
-            ]
+            return ["mcp package missing — install with: pip install 'cozmo-agent[mcp]'"]
 
         self.start()
         assert self._loop is not None
         for cfg in servers:
             try:
-                fut = asyncio.run_coroutine_threadsafe(
-                    self._aconnect(cfg), self._loop
-                )
+                fut = asyncio.run_coroutine_threadsafe(self._aconnect(cfg), self._loop)
                 tools = fut.result(timeout=max(30.0, cfg.timeout_s + 10))
                 with self._lock:
                     self._tools.extend(tools)
@@ -150,9 +146,7 @@ class McpManager:
                     raise ImportError(
                         "streamable HTTP client unavailable in this mcp version"
                     ) from exc
-                streams = await stack.enter_async_context(
-                    streamable_http_client(cfg.url)
-                )
+                streams = await stack.enter_async_context(streamable_http_client(cfg.url))
                 read, write = streams[0], streams[1]
             else:
                 raise ValueError(f"unsupported transport: {cfg.transport}")
@@ -186,9 +180,7 @@ class McpManager:
             await stack.aclose()
             raise
 
-    async def _acall(
-        self, server: str, remote_name: str, arguments: dict[str, Any]
-    ) -> str:
+    async def _acall(self, server: str, remote_name: str, arguments: dict[str, Any]) -> str:
         session = self._sessions.get(server)
         if session is None:
             raise RuntimeError(f"MCP server not connected: {server}")

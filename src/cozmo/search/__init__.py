@@ -6,6 +6,6 @@ from cozmo.search.rerank import LexicalReranker
 
 __all__ = [
     "HybridSearch",
-    "RetrievalPipeline",
     "LexicalReranker",
+    "RetrievalPipeline",
 ]

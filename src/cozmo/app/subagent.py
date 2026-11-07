@@ -136,10 +136,7 @@ class SubAgentService:
                     "paths": [],
                     "claims": [],
                     "open_questions": [],
-                    "summary": (
-                        f"subagent depth exceeded "
-                        f"({self._policy.max_subagent_depth})"
-                    ),
+                    "summary": (f"subagent depth exceeded ({self._policy.max_subagent_depth})"),
                     "stop_reason": depth_stop.value,
                     "steps": 0,
                     "tokens": 0,
@@ -164,9 +161,7 @@ class SubAgentService:
         runner = AgentRunner(
             models=self._models,
             registry=child_registry,
-            executor=ToolExecutor(
-                child_registry, max_chars=self._max_tool_result_chars
-            ),
+            executor=ToolExecutor(child_registry, max_chars=self._max_tool_result_chars),
             memory=ConversationMemory(max_messages=child_policy.memory_max_messages),
             history=None,
             policy=child_policy,

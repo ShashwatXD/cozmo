@@ -59,9 +59,7 @@ def test_ranged_read_file(tmp_path: Path) -> None:
         ToolCall(
             id="1",
             name="read_file",
-            arguments=json.dumps(
-                {"path": "f.py", "start_line": 3, "end_line": 5}
-            ),
+            arguments=json.dumps({"path": "f.py", "start_line": 3, "end_line": 5}),
         )
     )
     assert not result.is_error

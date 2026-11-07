@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 class PermissionError_(Exception):
     """Raised when a tool tries to leave the sandbox or use a disabled capability."""
+
 
 class WorkspaceGuard:
     """Path and capability checks before tool side-effects."""
@@ -28,9 +30,7 @@ class WorkspaceGuard:
         try:
             candidate.relative_to(self.workdir)
         except ValueError as exc:
-            raise PermissionError_(
-                f"Path '{path}' is outside workdir {self.workdir}"
-            ) from exc
+            raise PermissionError_(f"Path '{path}' is outside workdir {self.workdir}") from exc
         return candidate
 
     def require_write(self) -> None:
@@ -39,6 +39,4 @@ class WorkspaceGuard:
 
     def require_shell(self) -> None:
         if not self.allow_shell:
-            raise PermissionError_(
-                "Shell tool disabled. Set COZMO_ALLOW_SHELL=true to enable."
-            )
+            raise PermissionError_("Shell tool disabled. Set COZMO_ALLOW_SHELL=true to enable.")

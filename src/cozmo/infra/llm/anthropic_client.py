@@ -8,25 +8,28 @@ from typing import Any
 
 import httpx
 
-from cozmo.domain.completion import CompletionResult, Usage
+from cozmo.domain.completion import CompletionResult, TransientLLMError, Usage
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.tools import ToolCall, ToolSpec
 from cozmo.infra.llm.curl_log import log_llm_curl
 
 _API = "https://api.anthropic.com/v1/messages"
 _VERSION = "2023-06-01"
+# 408 timeout, 409 conflict, 429 rate limit, 5xx server, 529 overloaded
+_TRANSIENT_STATUS = frozenset({408, 409, 429, 500, 502, 503, 504, 529})
+_JSON_ONLY = "Respond with valid JSON only."
+
 
 def _to_anthropic_tools(tools: list[ToolSpec]) -> list[dict[str, Any]]:
     return [
         {
             "name": t.name,
             "description": t.description,
-            "input_schema": t.parameters
-            if t.parameters
-            else {"type": "object", "properties": {}},
+            "input_schema": t.parameters if t.parameters else {"type": "object", "properties": {}},
         }
         for t in tools
     ]
+
 
 def _split_system(messages: list[Message]) -> tuple[str | None, list[Message]]:
     system_parts: list[str] = []
@@ -39,6 +42,7 @@ def _split_system(messages: list[Message]) -> tuple[str | None, list[Message]]:
             rest.append(m)
     system = "\n\n".join(system_parts) if system_parts else None
     return system, rest
+
 
 def _to_anthropic_messages(messages: list[Message]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
@@ -78,6 +82,7 @@ def _to_anthropic_messages(messages: list[Message]) -> list[dict[str, Any]]:
         elif m.role == Role.ASSISTANT:
             out.append({"role": "assistant", "content": m.content or ""})
     return out
+
 
 class AnthropicClient:
     def __init__(
@@ -119,13 +124,22 @@ class AnthropicClient:
             body["system"] = system
         if tools:
             body["tools"] = _to_anthropic_tools(tools)
-        if json_mode and system:
-            body["system"] = system + "\n\nRespond with valid JSON only."
+        if json_mode:
+            body["system"] = f"{system}\n\n{_JSON_ONLY}" if system else _JSON_ONLY
 
         headers = self._headers()
         log_llm_curl(url=_API, headers=headers, body=body)
-        with httpx.Client(timeout=self._timeout) as client:
-            resp = client.post(_API, headers=headers, json=body)
+        try:
+            with httpx.Client(timeout=self._timeout) as client:
+                resp = client.post(_API, headers=headers, json=body)
+        except httpx.TransportError as exc:  # connect / read timeouts, resets
+            raise TransientLLMError(f"Anthropic transport error: {exc}") from exc
+        if resp.status_code in _TRANSIENT_STATUS:
+            raise TransientLLMError(
+                f"Anthropic error {resp.status_code}: {resp.text[:400]}",
+                status_code=resp.status_code,
+                retry_after_s=_retry_after(resp.headers.get("retry-after")),
+            )
         if resp.status_code >= 400:
             raise RuntimeError(f"Anthropic error {resp.status_code}: {resp.text[:400]}")
         data = resp.json()
@@ -164,3 +178,10 @@ class AnthropicClient:
         result = self.complete(messages, temperature=temperature)
         if result.content:
             yield result.content
+
+
+def _retry_after(raw: str | None) -> float | None:
+    try:
+        return max(0.0, float(raw)) if raw else None
+    except ValueError:
+        return None

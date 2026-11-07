@@ -31,6 +31,7 @@ OPENROUTER_FAVORITES = (
     "meta-llama/llama-3.3-70b-instruct",
 )
 
+
 @dataclass(frozen=True)
 class ModelCatalogResult:
     ok: bool
@@ -38,10 +39,10 @@ class ModelCatalogResult:
     error: str = ""
     favorites: tuple[str, ...] = ()
 
+
 def _merge_favorites(fetched: list[str], favorites: tuple[str, ...]) -> tuple[str, ...]:
     seen: set[str] = set()
     out: list[str] = []
-    fetched_set = set(fetched)
     for fav in favorites:
         if fav not in seen:
             out.append(fav)
@@ -53,6 +54,7 @@ def _merge_favorites(fetched: list[str], favorites: tuple[str, ...]) -> tuple[st
     if not fetched and not out:
         return favorites
     return tuple(out)
+
 
 def validate_and_list_openai(
     api_key: str,
@@ -78,10 +80,7 @@ def validate_and_list_openai(
         chatty = [
             i
             for i in ids
-            if any(
-                x in i
-                for x in ("gpt", "o1", "o3", "o4", "chatgpt", "davinci")
-            )
+            if any(x in i for x in ("gpt", "o1", "o3", "o4", "chatgpt", "davinci"))
             and "embedding" not in i
             and "tts" not in i
             and "whisper" not in i
@@ -96,6 +95,7 @@ def validate_and_list_openai(
         )
     except httpx.HTTPError as exc:
         return ModelCatalogResult(ok=False, error=f"Network error: {exc}")
+
 
 def validate_and_list_anthropic(
     api_key: str,
@@ -138,6 +138,7 @@ def validate_and_list_anthropic(
     except httpx.HTTPError as exc:
         return ModelCatalogResult(ok=False, error=f"Network error: {exc}")
 
+
 def validate_and_list_openrouter(
     api_key: str,
     *,
@@ -165,6 +166,7 @@ def validate_and_list_openrouter(
     except httpx.HTTPError as exc:
         return ModelCatalogResult(ok=False, error=f"Network error: {exc}")
 
+
 def list_ollama_models(
     base_url: str = "http://127.0.0.1:11434",
     *,
@@ -177,9 +179,7 @@ def list_ollama_models(
         with httpx.Client(timeout=timeout_s) as client:
             resp = client.get(f"{root}/api/tags")
         if resp.status_code >= 400:
-            return ModelCatalogResult(
-                ok=False, error=f"Ollama not reachable ({resp.status_code})"
-            )
+            return ModelCatalogResult(ok=False, error=f"Ollama not reachable ({resp.status_code})")
         models = resp.json().get("models") or []
         names = []
         for m in models:
@@ -193,9 +193,8 @@ def list_ollama_models(
             )
         return ModelCatalogResult(ok=True, models=tuple(sorted(names)))
     except httpx.HTTPError as exc:
-        return ModelCatalogResult(
-            ok=False, error=f"Cannot reach Ollama at {root}: {exc}"
-        )
+        return ModelCatalogResult(ok=False, error=f"Cannot reach Ollama at {root}: {exc}")
+
 
 def validate_and_list(
     provider: str,

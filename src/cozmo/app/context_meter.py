@@ -37,7 +37,7 @@ def context_meter(
 ) -> ContextMeter:
     est = estimate_context_tokens(memory, system_prompt=system_prompt)
     budget = max(1, policy.context_token_budget)
-    pct = min(100, int(round(100 * est / budget)))
+    pct = min(100, round(100 * est / budget))
     return ContextMeter(
         est_tokens=est,
         budget=budget,

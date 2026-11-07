@@ -82,13 +82,9 @@ class PermissionGate:
 
         if choice == PermissionChoice.ALWAYS_ALLOW:
             self.store.add_allow(_rule_for_call(call.name, args))
-            return PermissionDecision(
-                allowed=True, choice=choice, reason="always allow (saved)"
-            )
+            return PermissionDecision(allowed=True, choice=choice, reason="always allow (saved)")
         if choice == PermissionChoice.ALLOW_ONCE:
-            return PermissionDecision(
-                allowed=True, choice=choice, reason="allow once"
-            )
+            return PermissionDecision(allowed=True, choice=choice, reason="allow once")
         return PermissionDecision(
             allowed=False, choice=PermissionChoice.DENY, reason="denied by user"
         )

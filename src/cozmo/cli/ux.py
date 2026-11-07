@@ -10,6 +10,7 @@ from cozmo.cli import theme
 
 _SELECT_STYLE = None
 
+
 def _style():
     global _SELECT_STYLE
     if _SELECT_STYLE is None:
@@ -17,6 +18,7 @@ def _style():
 
         _SELECT_STYLE = Style(list(theme.QUESTIONARY))
     return _SELECT_STYLE
+
 
 def select(
     prompt: str,
@@ -51,6 +53,7 @@ def select(
         raise typer.Exit(code=1)
     return str(result)
 
+
 def confirm(prompt: str, default: bool = False) -> bool:
     import questionary
 
@@ -58,6 +61,7 @@ def confirm(prompt: str, default: bool = False) -> bool:
     if result is None:
         raise typer.Exit(code=1)
     return bool(result)
+
 
 def prompt_secret(prompt: str, *, required: bool = False, existing: str = "") -> str | None:
     import questionary
@@ -77,6 +81,7 @@ def prompt_secret(prompt: str, *, required: bool = False, existing: str = "") ->
         if not required:
             return None
         typer.secho("  ✗ API key required — try again", fg="red")
+
 
 def print_banner(*, clear: bool = False) -> None:
     """Launch splash: Cozmo face (clear screen on REPL)."""
@@ -123,14 +128,18 @@ def print_session_status(
             fg="cyan",
         )
 
+
 def print_ok(msg: str) -> None:
     typer.secho(f"  ✓ {msg}", fg="green")
+
 
 def print_err(msg: str) -> None:
     typer.secho(f"  ✗ {msg}", fg="red")
 
+
 def print_dim(msg: str) -> None:
     typer.secho(msg, fg="bright_black")
+
 
 def print_setup_summary(path: Path, data: dict) -> None:
     try:

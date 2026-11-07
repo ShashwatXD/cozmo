@@ -10,9 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-CITATION_RE = re.compile(
-    r"([A-Za-z0-9_@./-]+\.[A-Za-z]{1,6})(?::(\d+)(?:\s*[-–]\s*(\d+))?)?"
-)
+CITATION_RE = re.compile(r"([A-Za-z0-9_@./-]+\.[A-Za-z]{1,6})(?::(\d+)(?:\s*[-–]\s*(\d+))?)?")
 
 STOPWORDS = frozenset(
     {
@@ -181,9 +179,7 @@ def extract_citations(answer: str) -> list[Citation]:
 def _matches_context_path(citation_path: str, context_path: str) -> bool:
     if citation_path == context_path:
         return True
-    return context_path.endswith(f"/{citation_path}") or citation_path.endswith(
-        f"/{context_path}"
-    )
+    return context_path.endswith(f"/{citation_path}") or citation_path.endswith(f"/{context_path}")
 
 
 def validate_citation(citation: Citation, contexts: list[GroundingContext]) -> bool:
@@ -208,9 +204,7 @@ def score_groundedness(
     the context the agent was actually given.
     """
     claims = split_claims(answer)
-    context_vocab = set(
-        content_words("\n".join(c.content for c in contexts))
-    )
+    context_vocab = set(content_words("\n".join(c.content for c in contexts)))
 
     scored: list[ClaimScore] = []
     for claim in claims:
@@ -228,9 +222,7 @@ def score_groundedness(
     citations = extract_citations(answer)
     invalid = [c for c in citations if not validate_citation(c, contexts)]
 
-    support_score = (
-        sum(1 for c in scored if c.supported) / len(scored) if scored else 0.0
-    )
+    support_score = sum(1 for c in scored if c.supported) / len(scored) if scored else 0.0
     citation_score: float | None
     if citations:
         citation_score = (len(citations) - len(invalid)) / len(citations)
@@ -254,16 +246,13 @@ def score_groundedness(
 
     supported_n = len(scored) - len(unsupported)
     summary = (
-        f"Groundedness {score}/100 — "
-        f"{supported_n}/{len(scored)} claims supported, {citation_note}."
+        f"Groundedness {score}/100 — {supported_n}/{len(scored)} claims supported, {citation_note}."
     )
 
     return GroundednessReport(
         score=score,
         support_score=round(support_score, 3),
-        citation_score=(
-            round(citation_score, 3) if citation_score is not None else None
-        ),
+        citation_score=(round(citation_score, 3) if citation_score is not None else None),
         claims=scored,
         unsupported=unsupported,
         citations={

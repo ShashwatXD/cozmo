@@ -1,0 +1,43 @@
+{"id": "nl-01", "kind": "conceptual", "query": "how does the agent notice it keeps calling the same tool over and over", "expected": ["app/stuck_detector.py"]}
+{"id": "nl-02", "kind": "conceptual", "query": "summarize older conversation turns when the context window gets too big", "expected": ["app/compaction.py"]}
+{"id": "nl-03", "kind": "conceptual", "query": "stop the agent when it exceeds the dollar budget or the time limit", "expected": ["domain/guardrails.py", "app/agent.py"]}
+{"id": "nl-04", "kind": "conceptual", "query": "ask the user before writing a file or running a shell command", "expected": ["app/permissions.py"]}
+{"id": "nl-05", "kind": "conceptual", "query": "remember always-allow rules for mutating tools across runs", "expected": ["infra/tools/permission_store.py"]}
+{"id": "nl-06", "kind": "conceptual", "query": "prevent tools from touching files outside the project folder", "expected": ["infra/tools/permissions.py"]}
+{"id": "nl-07", "kind": "conceptual", "query": "director splits a task between researcher coder and reviewer then merges the answers", "expected": ["app/team.py"]}
+{"id": "nl-08", "kind": "conceptual", "query": "child agent with read only tools returns a compact evidence summary", "expected": ["app/subagent.py"]}
+{"id": "nl-09", "kind": "conceptual", "query": "check whether claims in the answer are supported by the retrieved code and citations point to real lines", "expected": ["app/groundedness.py"]}
+{"id": "nl-10", "kind": "conceptual", "query": "combine keyword ranking with embedding similarity using reciprocal rank fusion", "expected": ["search/hybrid_search.py"]}
+{"id": "nl-11", "kind": "conceptual", "query": "add surrounding source lines around a search hit", "expected": ["search/context_expand.py"]}
+{"id": "nl-12", "kind": "conceptual", "query": "split a file into overlapping pieces on line boundaries before embedding", "expected": ["infra/rag/chunking.py"]}
+{"id": "nl-13", "kind": "conceptual", "query": "only re-embed files whose content hash changed since the last index run", "expected": ["infra/rag/indexer.py"]}
+{"id": "nl-14", "kind": "conceptual", "query": "retry a model call with exponential backoff on transient failures", "expected": ["infra/llm/retrying.py"]}
+{"id": "nl-15", "kind": "conceptual", "query": "convert chat messages and tool definitions to the Anthropic API format", "expected": ["infra/llm/anthropic_client.py"]}
+{"id": "nl-16", "kind": "conceptual", "query": "estimate how much money a request cost from token usage", "expected": ["domain/cost.py"]}
+{"id": "nl-17", "kind": "conceptual", "query": "rebuild the conversation from a saved session log so the user can continue", "expected": ["app/session_resume.py"]}
+{"id": "nl-18", "kind": "conceptual", "query": "write a session transcript out as markdown", "expected": ["app/session_export.py"]}
+{"id": "nl-19", "kind": "conceptual", "query": "skip node_modules and files listed in gitignore when walking the workspace", "expected": ["infra/workspace/ignore.py"]}
+{"id": "nl-20", "kind": "conceptual", "query": "search the repository with ripgrep and fall back to python when it is not installed", "expected": ["infra/tools/rg_search.py"]}
+{"id": "nl-21", "kind": "conceptual", "query": "connect to external tool servers over stdio and expose their tools to the agent", "expected": ["infra/mcp/client.py", "infra/mcp/register.py"]}
+{"id": "nl-22", "kind": "conceptual", "query": "truncate very large tool output before it goes back into the prompt", "expected": ["infra/tools/caps.py", "infra/tools/registry.py"]}
+{"id": "nl-23", "kind": "conceptual", "query": "use a cheaper model for tool calls and a stronger one for summarizing", "expected": ["app/model_router.py"]}
+{"id": "nl-24", "kind": "conceptual", "query": "validate an API key and list the models available from the provider during setup", "expected": ["infra/llm/model_catalog.py", "cli/setup_wizard.py"]}
+{"id": "nl-25", "kind": "conceptual", "query": "show roughly how full the context window is in the prompt footer", "expected": ["app/context_meter.py"]}
+{"id": "nl-26", "kind": "conceptual", "query": "search earlier chat turns from past sessions", "expected": ["infra/history/rag.py"]}
+{"id": "nl-27", "kind": "conceptual", "query": "settings precedence between command line flags environment variables and config files", "expected": ["settings.py", "infra/config/store.py"]}
+{"id": "nl-28", "kind": "conceptual", "query": "write structured trace events for each LLM call and tool call", "expected": ["infra/telemetry/tracer.py"]}
+{"id": "id-01", "kind": "identifier", "query": "detect_stuck", "expected": ["app/stuck_detector.py"]}
+{"id": "id-02", "kind": "identifier", "query": "WorkspaceGuard require_shell", "expected": ["infra/tools/permissions.py"]}
+{"id": "id-03", "kind": "identifier", "query": "RRF_K reciprocal rank", "expected": ["search/hybrid_search.py"]}
+{"id": "id-04", "kind": "identifier", "query": "LexicalReranker rerank", "expected": ["search/rerank.py"]}
+{"id": "id-05", "kind": "identifier", "query": "plan_team_orders", "expected": ["app/team.py"]}
+{"id": "id-06", "kind": "identifier", "query": "StopReason MAX_ITERATIONS", "expected": ["domain/guardrails.py"]}
+{"id": "id-07", "kind": "identifier", "query": "hydrate_memory_from_events", "expected": ["app/session_resume.py"]}
+{"id": "id-08", "kind": "identifier", "query": "JsonlEventStore append", "expected": ["infra/history/store.py"]}
+{"id": "id-09", "kind": "identifier", "query": "shape_tool_content max_chars", "expected": ["infra/tools/caps.py"]}
+{"id": "id-10", "kind": "identifier", "query": "resolve_vector_backend chroma", "expected": ["infra/rag/factory.py"]}
+{"id": "id-11", "kind": "identifier", "query": "estimate_cost_usd", "expected": ["domain/cost.py"]}
+{"id": "id-12", "kind": "identifier", "query": "mcp_tool_name is_mcp_tool", "expected": ["infra/mcp/types.py"]}
+{"id": "id-13", "kind": "identifier", "query": "ConversationMemory rolling summary", "expected": ["domain/memory.py"]}
+{"id": "id-14", "kind": "identifier", "query": "score_groundedness", "expected": ["app/groundedness.py"]}
+{"id": "id-15", "kind": "identifier", "query": "IgnoreFilter iter_files", "expected": ["infra/workspace/ignore.py"]}

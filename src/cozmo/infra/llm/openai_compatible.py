@@ -14,6 +14,7 @@ from cozmo.infra.llm.curl_log import log_llm_curl
 
 _DEFAULT_BASE = "https://api.openai.com/v1"
 
+
 def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for m in messages:
@@ -47,6 +48,7 @@ def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
         else:
             out.append({"role": m.role.value, "content": m.content})
     return out
+
 
 class OpenAICompatibleClient:
     def __init__(

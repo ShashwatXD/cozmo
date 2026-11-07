@@ -43,8 +43,7 @@ RUN_TEAM_SPEC = ToolSpec(
                 "type": "array",
                 "items": {"type": "string"},
                 "description": (
-                    "Optional worker agent names or ids "
-                    "(default: researcher, coder, reviewer)"
+                    "Optional worker agent names or ids (default: researcher, coder, reviewer)"
                 ),
             },
             "parallel": {
@@ -97,9 +96,7 @@ def plan_team_orders(
     if not workers:
         return "No workers available", []
 
-    worker_list = "\n".join(
-        f"- {w.name} ({w.id}): {w.description}" for w in workers
-    )
+    worker_list = "\n".join(f"- {w.name} ({w.id}): {w.description}" for w in workers)
     prompt = f"Task:\n{task}\n\nWorkers:\n{worker_list}\n\nRespond with JSON only."
     director_prompt = load_system_prompt("director")
     result = models.orchestrator.complete(
@@ -248,9 +245,7 @@ class TeamService:
         if context:
             goal = f"{context}\n\nGoal:\n{order.goal}"
         try:
-            raw = self._worker_service(order.agent).run(
-                goal, max_steps=order.agent.max_steps
-            )
+            raw = self._worker_service(order.agent).run(goal, max_steps=order.agent.max_steps)
             pack = json.loads(raw)
             return WorkerResult(
                 agent_id=order.agent.id,
@@ -296,8 +291,7 @@ class TeamService:
                     "plan": "",
                     "workers": [],
                     "synthesis": (
-                        f"team blocked: subagent depth exceeded "
-                        f"({self._policy.max_subagent_depth})"
+                        f"team blocked: subagent depth exceeded ({self._policy.max_subagent_depth})"
                     ),
                     "loops": 0,
                     "stop_reason": depth_stop.value,

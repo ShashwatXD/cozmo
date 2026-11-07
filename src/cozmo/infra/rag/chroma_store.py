@@ -21,8 +21,7 @@ class ChromaVectorStore:
             import chromadb
         except ImportError as exc:
             raise ImportError(
-                "chromadb is required. Reinstall cozmo-agent "
-                "(chromadb is a core dependency)."
+                "chromadb is required. Reinstall cozmo-agent (chromadb is a core dependency)."
             ) from exc
 
         self._persist_dir = persist_dir
@@ -38,6 +37,18 @@ class ChromaVectorStore:
     def __len__(self) -> int:
         return int(self._collection.count())
 
+    @property
+    def version(self) -> int:
+        """Mutation counter (all writes go through the JSON mirror too)."""
+        return self._mirror.version
+
+    def drop_paths(self, paths: set[str]) -> int:
+        """Delete every chunk whose path is in *paths* (incremental re-index)."""
+        if not paths:
+            return 0
+        self._collection.delete(where={"path": {"$in": sorted(paths)}})  # type: ignore[dict-item]
+        return self._mirror.drop_paths(paths)
+
     def clear(self) -> None:
         name = self._collection.name
         self._client.delete_collection(name)
@@ -50,7 +61,7 @@ class ChromaVectorStore:
     def add(self, chunk: Chunk, embedding: list[float]) -> None:
         self._collection.upsert(
             ids=[chunk.id],
-            embeddings=[embedding],
+            embeddings=[embedding],  # type: ignore[arg-type]  # chroma stubs want ndarray
             documents=[chunk.text],
             metadatas=[
                 {
@@ -69,7 +80,7 @@ class ChromaVectorStore:
         if self._collection.count() == 0:
             return []
         result = self._collection.query(
-            query_embeddings=[query_embedding],
+            query_embeddings=[query_embedding],  # type: ignore[arg-type]
             n_results=min(top_k, max(1, self._collection.count())),
         )
         hits: list[SearchHit] = []
@@ -87,7 +98,7 @@ class ChromaVectorStore:
                     chunk=Chunk(
                         id=str(doc_id),
                         path=str(meta.get("path", "")),
-                        start_line=int(meta.get("start_line", 1)),
+                        start_line=_as_int(meta.get("start_line"), default=1),
                         text=str(docs[i] if i < len(docs) else meta.get("text", "")),
                     ),
                     score=score,
@@ -118,3 +129,15 @@ class ChromaVectorStore:
             if path.exists():
                 store._mirror = JsonVectorStore.load(path)
         return store
+
+
+def _as_int(value: object, *, default: int) -> int:
+    """Coerce a Chroma metadata value to int (metadata is loosely typed)."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float, str)):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default

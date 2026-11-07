@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from cozmo.domain.rag import Chunk
 
+
 def chunk_text(
     path: str,
     text: str,

@@ -52,6 +52,8 @@ def test_build_anthropic_client() -> None:
     from cozmo.infra.llm.anthropic_client import AnthropicClient
 
     llm = build_llm(
-        Settings(provider="anthropic", model="claude-3-5-haiku-20241022", api_key="sk-ant", max_retries=1)
+        Settings(
+            provider="anthropic", model="claude-3-5-haiku-20241022", api_key="sk-ant", max_retries=1
+        )
     )
     assert isinstance(llm, AnthropicClient)

@@ -51,18 +51,22 @@ _LEGACY_KEY_MAP = {
     "openai_base_url": "base_url",
 }
 
+
 def load_user_config(path: Path | None = None) -> dict[str, Any]:
     return _load_json_config(path or user_config_path())
+
 
 def load_project_config(workdir: Path | None = None) -> dict[str, Any]:
     from cozmo.infra.config.paths import project_config_path
 
     return _load_json_config(project_config_path(workdir))
 
+
 def load_merged_file_config(workdir: Path | None = None) -> dict[str, Any]:
     merged = load_user_config()
     merged.update(load_project_config(workdir))
     return merged
+
 
 def _normalize_keys(raw: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
@@ -74,6 +78,7 @@ def _normalize_keys(raw: dict[str, Any]) -> dict[str, Any]:
             out[mapped] = value
     return out
 
+
 def _load_json_config(cfg_path: Path) -> dict[str, Any]:
     if not cfg_path.is_file():
         return {}
@@ -84,6 +89,7 @@ def _load_json_config(cfg_path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
     return _normalize_keys(raw)
+
 
 def example_config() -> dict[str, Any]:
     return {
@@ -104,6 +110,7 @@ def example_config() -> dict[str, Any]:
         "trace_enabled": True,
     }
 
+
 def save_user_config(data: dict[str, Any], path: Path | None = None) -> Path:
     cfg_path = path or user_config_path()
     directory = cfg_path.parent
@@ -114,9 +121,7 @@ def save_user_config(data: dict[str, Any], path: Path | None = None) -> Path:
         pass
 
     normalized = _normalize_keys(data)
-    filtered = {
-        k: v for k, v in normalized.items() if k in USER_CONFIG_KEYS and v is not None
-    }
+    filtered = {k: v for k, v in normalized.items() if k in USER_CONFIG_KEYS and v is not None}
     if "workdir" in filtered and isinstance(filtered["workdir"], Path):
         filtered["workdir"] = str(filtered["workdir"])
 

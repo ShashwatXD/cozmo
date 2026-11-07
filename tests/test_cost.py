@@ -9,9 +9,7 @@ def test_ollama_model_is_free() -> None:
 
 
 def test_gpt4o_mini_has_positive_cost() -> None:
-    cost = estimate_cost_usd(
-        "gpt-4o-mini", Usage(prompt_tokens=1_000_000, completion_tokens=0)
-    )
+    cost = estimate_cost_usd("gpt-4o-mini", Usage(prompt_tokens=1_000_000, completion_tokens=0))
     assert cost == 0.15
 
 

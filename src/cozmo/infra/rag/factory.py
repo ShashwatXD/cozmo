@@ -114,8 +114,6 @@ def build_vector_store(settings: Settings, workdir: Path):
     if backend == "chroma":
         from cozmo.infra.rag.chroma_store import ChromaVectorStore
 
-        store: VectorStore = ChromaVectorStore.load(
-            index_path(root), persist_dir=chroma_dir(root)
-        )
+        store: VectorStore = ChromaVectorStore.load(index_path(root), persist_dir=chroma_dir(root))
         return store
     return JsonVectorStore.load(index_path(root))

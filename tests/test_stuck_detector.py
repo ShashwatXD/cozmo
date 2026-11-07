@@ -12,7 +12,7 @@ from cozmo.app.stuck_detector import (
 from cozmo.domain.completion import CompletionResult, Usage
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.tools import ToolCall
-from cozmo.infra.llm.stub import StubLLMClient, _messages_since_last_user
+from cozmo.infra.llm.stub import _messages_since_last_user
 from cozmo.infra.tools import build_default_registry
 from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolExecutor
@@ -49,12 +49,8 @@ def test_repeating_action_error() -> None:
 
 
 def test_alternating_pattern() -> None:
-    a = step_from_tool_call(
-        tool_name="read_file", args={"path": "a.py"}, result="content a"
-    )
-    b = step_from_tool_call(
-        tool_name="read_file", args={"path": "b.py"}, result="content b"
-    )
+    a = step_from_tool_call(tool_name="read_file", args={"path": "a.py"}, result="content a")
+    b = step_from_tool_call(tool_name="read_file", args={"path": "b.py"}, result="content b")
     steps = [a, b, a, b, a, b]
     verdict = detect_stuck(steps)
     assert verdict.stuck is True

@@ -55,11 +55,9 @@ class ToolExecutor:
         try:
             args = json.loads(call.arguments or "{}")
             if not isinstance(args, dict):
-                raise ValueError("Tool arguments must be a JSON object")
+                raise TypeError("Tool arguments must be a JSON object")
             content = registered.handler(args)
-            content = shape_tool_content(
-                call.name, content, max_chars=self._max_chars
-            )
+            content = shape_tool_content(call.name, content, max_chars=self._max_chars)
             return ToolResult(
                 tool_call_id=call.id,
                 name=call.name,

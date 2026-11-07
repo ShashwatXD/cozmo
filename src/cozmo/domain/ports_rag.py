@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol, Sequence, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from cozmo.domain.rag import Chunk, RetrievalCandidate, SearchHit
 
 
 @runtime_checkable
 class Embedder(Protocol):
-    def embed(self, text: str) -> list[float]:
-        ...
+    def embed(self, text: str) -> list[float]: ...
 
-    def embed_many(self, texts: list[str]) -> list[list[float]]:
-        ...
+    def embed_many(self, texts: list[str]) -> list[list[float]]: ...
 
 
 @runtime_checkable
@@ -27,8 +26,7 @@ class Reranker(Protocol):
         candidates: Sequence[RetrievalCandidate],
         *,
         top_k: int = 10,
-    ) -> list[RetrievalCandidate]:
-        ...
+    ) -> list[RetrievalCandidate]: ...
 
 
 @runtime_checkable

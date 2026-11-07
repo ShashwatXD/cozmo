@@ -76,7 +76,7 @@ class AgentPolicy:
     @staticmethod
     def from_mapping(data: dict[str, Any]) -> AgentPolicy:
         """Build from Settings-like dict without importing pydantic."""
-        known = {f.name for f in AgentPolicy.__dataclass_fields__.values()}  # type: ignore[attr-defined]
+        known = {f.name for f in AgentPolicy.__dataclass_fields__.values()}
         kwargs = {k: v for k, v in data.items() if k in known and v is not None}
         return AgentPolicy(**kwargs)
 
@@ -87,14 +87,10 @@ class AgentPolicy:
             return cls.from_mapping(settings)
         data = {
             "max_agent_steps": getattr(settings, "max_agent_steps", 8),
-            "max_messages_before_compact": getattr(
-                settings, "max_messages_before_compact", 30
-            ),
+            "max_messages_before_compact": getattr(settings, "max_messages_before_compact", 30),
             "memory_max_messages": getattr(settings, "memory_max_messages", 40),
             "context_token_budget": getattr(settings, "context_token_budget", 24_000),
-            "max_tool_calls_per_session": getattr(
-                settings, "max_tool_calls_per_session", 40
-            ),
+            "max_tool_calls_per_session": getattr(settings, "max_tool_calls_per_session", 40),
             "max_cost_usd": getattr(settings, "max_cost_usd", None),
             "session_timeout_s": getattr(settings, "session_timeout_s", 600.0),
             "max_subagent_depth": getattr(settings, "max_subagent_depth", 1),

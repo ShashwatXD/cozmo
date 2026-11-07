@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
+
+logger = logging.getLogger(__name__)
 
 _NAME_OK = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -27,10 +30,7 @@ class McpServerConfig(BaseModel):
     def _validate_name(cls, value: str) -> str:
         name = (value or "").strip()
         if not name or not _NAME_OK.match(name):
-            raise ValueError(
-                "mcp server name must be non-empty [A-Za-z0-9_-]+ "
-                f"(got {value!r})"
-            )
+            raise ValueError(f"mcp server name must be non-empty [A-Za-z0-9_-]+ (got {value!r})")
         return name
 
 
@@ -46,7 +46,8 @@ def parse_mcp_servers(raw: Any) -> list[McpServerConfig]:
             continue
         try:
             cfg = McpServerConfig.model_validate(item)
-        except Exception:
+        except ValidationError as exc:
+            logger.warning("skipping invalid MCP server config %r: %s", item.get("name"), exc)
             continue
         if cfg.enabled:
             out.append(cfg)

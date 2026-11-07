@@ -1,7 +1,5 @@
 """CLI help + stub chat. Forces stub so .env ollama does not hit the network."""
 
-import os
-
 from typer.testing import CliRunner
 
 from cozmo.cli.main import app
@@ -12,7 +10,7 @@ runner = CliRunner()
 def _stub_env(monkeypatch) -> None:
     monkeypatch.setenv("COZMO_PROVIDER", "stub")
     monkeypatch.setenv("COZMO_MODEL", "stub-model")
-    # Prevent repo .env openai/ollama from winning over process env... 
+    # Prevent repo .env openai/ollama from winning over process env...
     # pydantic-settings: env vars already win over env_file by default.
 
 
