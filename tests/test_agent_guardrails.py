@@ -95,6 +95,19 @@ def test_session_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     assert out.stop_reason is StopReason.SESSION_TIMEOUT
 
 
+def test_session_timeout_resets_each_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    class AnswerLLM(LoopingLLM):
+        def complete(self, messages, *, temperature=0.2, json_mode=False, tools=None):
+            return CompletionResult(content="answer", usage=self.usage)
+
+    now = {"t": 0.0}
+    monkeypatch.setattr(agent_mod.time, "monotonic", lambda: now["t"])
+    runner = _runner(AnswerLLM(), AgentPolicy(max_agent_steps=5, session_timeout_s=10))
+    assert runner.run("first").stop_reason is StopReason.COMPLETED
+    now["t"] = 1000.0  # user comes back long after the timeout window
+    assert runner.run("second").stop_reason is StopReason.COMPLETED
+
+
 def test_stuck_detector_injects_hint_once() -> None:
     llm = LoopingLLM()
     events = list(_runner(llm, AgentPolicy(max_agent_steps=8)).run_events("go"))

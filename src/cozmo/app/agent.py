@@ -97,7 +97,7 @@ class AgentRunner:
         self._depth = depth
         self._tool_calls = 0
         self._session_cost = 0.0
-        self._session_started = time.monotonic()
+        self._turn_started = 0.0
         self.last_result: AgentResult | None = None
         self._stuck_steps: list = []
         self._stuck_warned = False
@@ -132,6 +132,7 @@ class AgentRunner:
         return self.last_result
 
     def run_events(self, user_text: str) -> Iterator[AgentEvent]:
+        self._turn_started = time.monotonic()
         if self._history:
             self._history.user_turn(user_text)
 
@@ -343,7 +344,7 @@ class AgentRunner:
         return self._executor.execute(call)
 
     def _check_hard_limits(self) -> StopReason | None:
-        elapsed = time.monotonic() - self._session_started
+        elapsed = time.monotonic() - self._turn_started
         return (
             self._policy.check_session_timeout(elapsed)
             or self._policy.check_tool_calls(self._tool_calls)
