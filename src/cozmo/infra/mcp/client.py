@@ -35,7 +35,8 @@ class McpManager:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._sessions: dict[str, Any] = {}
-        self._stacks: dict[str, AsyncExitStack] = {}
+        self._stops: dict[str, asyncio.Event] = {}
+        self._tasks: dict[str, asyncio.Task[None]] = {}
         self._tools: list[McpToolInfo] = []
         self._lock = threading.Lock()
 
@@ -75,7 +76,6 @@ class McpManager:
         self._loop = None
         self._thread = None
         self._sessions.clear()
-        self._stacks.clear()
         self._tools.clear()
 
     def connect_servers(self, servers: list[McpServerConfig]) -> list[str]:
@@ -120,65 +120,84 @@ class McpManager:
         loop.close()
 
     async def _aconnect(self, cfg: McpServerConfig) -> list[McpToolInfo]:
+        loop = asyncio.get_running_loop()
+        ready: asyncio.Future[list[McpToolInfo]] = loop.create_future()
+        stop = asyncio.Event()
+        task = loop.create_task(self._serve(cfg, ready, stop))
+        tools = await ready
+        self._stops[cfg.name] = stop
+        self._tasks[cfg.name] = task
+        return tools
+
+    async def _serve(
+        self,
+        cfg: McpServerConfig,
+        ready: asyncio.Future[list[McpToolInfo]],
+        stop: asyncio.Event,
+    ) -> None:
+        """Own one connection. anyio requires open and close to happen in the same task."""
         from mcp import ClientSession
 
-        stack = AsyncExitStack()
-        await stack.__aenter__()
         try:
-            if cfg.transport == "stdio":
-                if not cfg.command:
-                    raise ValueError("stdio transport requires command")
-                from mcp import StdioServerParameters
-                from mcp.client.stdio import stdio_client
+            async with AsyncExitStack() as stack:
+                if cfg.transport == "stdio":
+                    if not cfg.command:
+                        raise ValueError("stdio transport requires command")
+                    from mcp import StdioServerParameters
+                    from mcp.client.stdio import stdio_client
 
-                params = StdioServerParameters(
-                    command=cfg.command,
-                    args=list(cfg.args or []),
-                    env=dict(cfg.env) if cfg.env else None,
-                )
-                read, write = await stack.enter_async_context(stdio_client(params))
-            elif cfg.transport == "http":
-                if not cfg.url:
-                    raise ValueError("http transport requires url")
-                try:
-                    from mcp.client.streamable_http import streamable_http_client
-                except ImportError as exc:
-                    raise ImportError(
-                        "streamable HTTP client unavailable in this mcp version"
-                    ) from exc
-                streams = await stack.enter_async_context(streamable_http_client(cfg.url))
-                read, write = streams[0], streams[1]
-            else:
-                raise ValueError(f"unsupported transport: {cfg.transport}")
-
-            session = await stack.enter_async_context(ClientSession(read, write))
-            await session.initialize()
-            listed = await session.list_tools()
-            tools: list[McpToolInfo] = []
-            for tool in listed.tools:
-                remote = str(tool.name)
-                schema = getattr(tool, "inputSchema", None) or {
-                    "type": "object",
-                    "properties": {},
-                }
-                if not isinstance(schema, dict):
-                    schema = {"type": "object", "properties": {}}
-                tools.append(
-                    McpToolInfo(
-                        server=cfg.name,
-                        remote_name=remote,
-                        local_name=mcp_tool_name(cfg.name, remote),
-                        description=(tool.description or remote).strip()
-                        or f"MCP tool {remote} via {cfg.name}",
-                        parameters=schema,
+                    params = StdioServerParameters(
+                        command=cfg.command,
+                        args=list(cfg.args or []),
+                        env=dict(cfg.env) if cfg.env else None,
                     )
-                )
-            self._stacks[cfg.name] = stack
-            self._sessions[cfg.name] = session
-            return tools
-        except Exception:
-            await stack.aclose()
-            raise
+                    read, write = await stack.enter_async_context(stdio_client(params))
+                elif cfg.transport == "http":
+                    if not cfg.url:
+                        raise ValueError("http transport requires url")
+                    try:
+                        from mcp.client.streamable_http import streamable_http_client
+                    except ImportError as exc:
+                        raise ImportError(
+                            "streamable HTTP client unavailable in this mcp version"
+                        ) from exc
+                    streams = await stack.enter_async_context(streamable_http_client(cfg.url))
+                    read, write = streams[0], streams[1]
+                else:
+                    raise ValueError(f"unsupported transport: {cfg.transport}")
+
+                session = await stack.enter_async_context(ClientSession(read, write))
+                await session.initialize()
+                listed = await session.list_tools()
+                tools: list[McpToolInfo] = []
+                for tool in listed.tools:
+                    remote = str(tool.name)
+                    schema = getattr(tool, "inputSchema", None) or {
+                        "type": "object",
+                        "properties": {},
+                    }
+                    if not isinstance(schema, dict):
+                        schema = {"type": "object", "properties": {}}
+                    tools.append(
+                        McpToolInfo(
+                            server=cfg.name,
+                            remote_name=remote,
+                            local_name=mcp_tool_name(cfg.name, remote),
+                            description=(tool.description or remote).strip()
+                            or f"MCP tool {remote} via {cfg.name}",
+                            parameters=schema,
+                        )
+                    )
+                self._sessions[cfg.name] = session
+                ready.set_result(tools)
+                await stop.wait()
+        except Exception as exc:  # noqa: BLE001 - one bad server must not affect others
+            if ready.done():
+                logger.warning("mcp server %s closed with error: %s", cfg.name, exc)
+            else:
+                ready.set_exception(exc)
+        finally:
+            self._sessions.pop(cfg.name, None)
 
     async def _acall(self, server: str, remote_name: str, arguments: dict[str, Any]) -> str:
         session = self._sessions.get(server)
@@ -191,13 +210,12 @@ class McpManager:
         return text or "(empty MCP result)"
 
     async def _aclose_all(self) -> None:
-        for name, stack in list(self._stacks.items()):
-            try:
-                await stack.aclose()
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("mcp close %s: %s", name, exc)
-        self._stacks.clear()
-        self._sessions.clear()
+        for stop in self._stops.values():
+            stop.set()
+        if self._tasks:
+            await asyncio.gather(*self._tasks.values(), return_exceptions=True)
+        self._stops.clear()
+        self._tasks.clear()
 
 
 def _flatten_content(result: Any) -> str:

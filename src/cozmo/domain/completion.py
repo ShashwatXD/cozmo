@@ -36,6 +36,11 @@ class CompletionResult:
     def has_tool_calls(self) -> bool:
         return len(self.tool_calls) > 0
 
+    @property
+    def truncated(self) -> bool:
+        """True when the provider stopped because it hit the output limit."""
+        return self.finish_reason in {"length", "max_tokens"}
+
 
 class TransientLLMError(RuntimeError):
     """Provider failure worth retrying (rate limit, overload, 5xx, network)."""

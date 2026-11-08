@@ -5,6 +5,21 @@ from __future__ import annotations
 from cozmo.domain.messages import Message, Role
 
 
+def drop_incomplete_tool_group(messages: list[Message]) -> list[Message]:
+    """
+    Remove a trailing assistant tool-call group that is missing results.
+
+    Providers reject a history where a tool call has no matching result, so a run
+    that stops mid-batch must not leave one behind.
+    """
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].role == Role.ASSISTANT and messages[i].tool_calls:
+            wanted = {tc.id for tc in messages[i].tool_calls}
+            answered = {m.tool_call_id for m in messages[i + 1 :] if m.role == Role.TOOL}
+            return messages[:i] if wanted - answered else list(messages)
+    return list(messages)
+
+
 class ConversationMemory:
     """
     Stores non-system messages; for_prompt() returns system + summary + trimmed history.

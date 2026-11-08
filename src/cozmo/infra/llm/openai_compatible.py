@@ -68,6 +68,7 @@ class OpenAICompatibleClient:
             api_key=api_key,
             base_url=base_url,
             timeout=timeout_s,
+            max_retries=0,  # RetryingLLMClient owns retries; stacking them multiplies attempts
         )
 
     def _request_headers(self) -> dict[str, str]:

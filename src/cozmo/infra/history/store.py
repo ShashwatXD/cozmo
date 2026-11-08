@@ -13,6 +13,8 @@ from cozmo.infra.config.paths import (
     workspace_history_dir,
 )
 
+_TRIM_EVERY = 100
+
 
 class JsonlEventStore:
     def __init__(
@@ -27,6 +29,7 @@ class JsonlEventStore:
         self._enabled = enabled
         self._max_sessions = max_sessions
         self._max_events = max_events_per_session
+        self._appends = 0
         if enabled:
             workspace_history_dir(self._workdir).mkdir(parents=True, exist_ok=True)
 
@@ -39,8 +42,11 @@ class JsonlEventStore:
             f.write(json.dumps(event.to_dict(), default=str) + "\n")
         if event.kind.value == "session_start":
             self._index_session(event)
-        self._trim_session_file(path)
-        self._prune_old_sessions()
+            self._prune_old_sessions()
+        # Trimming reads the whole file, so do it occasionally instead of per event.
+        self._appends += 1
+        if self._appends % _TRIM_EVERY == 0:
+            self._trim_session_file(path)
 
     def list_events(self, session_id: str) -> list[SessionEvent]:
         path = session_events_path(self._workdir, session_id)

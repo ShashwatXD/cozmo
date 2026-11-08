@@ -12,6 +12,7 @@ from cozmo.app.model_router import ModelRouter
 from cozmo.domain.guardrails import AgentPolicy, StopReason
 from cozmo.domain.memory import ConversationMemory
 from cozmo.domain.tools import ToolSpec
+from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools.registry import ToolExecutor, ToolRegistry
 from cozmo.prompts.loader import load_system_prompt
 
@@ -106,7 +107,9 @@ class SubAgentService:
         allowed_tools: frozenset[str] | None = None,
         system_prompt: str | None = None,
         max_tool_result_chars: int = 24_000,
+        tracer: Tracer | None = None,
     ) -> None:
+        self._tracer = tracer
         self._models = models
         self._parent_registry = parent_registry
         self._policy = policy
@@ -164,6 +167,7 @@ class SubAgentService:
             executor=ToolExecutor(child_registry, max_chars=self._max_tool_result_chars),
             memory=ConversationMemory(max_messages=child_policy.memory_max_messages),
             history=None,
+            tracer=self._tracer,
             policy=child_policy,
             system_prompt=self._system_prompt,
             temperature=self._temperature,
@@ -194,6 +198,8 @@ class SubAgentService:
             steps = int(max_steps)
         else:
             steps = None
+        if steps is not None:  # the model may shorten a child's budget, never extend it
+            steps = max(1, min(steps, self._policy.for_subagent().max_agent_steps))
         return self.run(goal, max_steps=steps)
 
 

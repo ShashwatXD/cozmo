@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from cozmo.domain.guardrails import AgentPolicy, estimate_tokens
 from cozmo.domain.memory import ConversationMemory
 from cozmo.domain.messages import Message, Role
 from cozmo.domain.ports import LLMClient
 from cozmo.prompts.loader import load_system_prompt
+
+_ELIDED = "[older tool output removed to save context:"
+_ELIDE_MIN_CHARS = 400
+_ELIDE_KEEP_CHARS = 200
 
 
 def estimate_context_tokens(
@@ -21,6 +27,43 @@ def estimate_context_tokens(
     if system_prompt:
         parts.append(system_prompt)
     return estimate_tokens("\n".join(parts))
+
+
+def estimate_messages_tokens(messages: list[Message]) -> int:
+    """Size of the exact prompt about to be sent, including tool-call arguments."""
+    parts: list[str] = []
+    for m in messages:
+        parts.append(m.content)
+        parts.extend(tc.arguments for tc in m.tool_calls)
+    return estimate_tokens("\n".join(parts))
+
+
+def shrink_tool_results(
+    messages: list[Message], policy: AgentPolicy, *, keep_recent: int = 4
+) -> tuple[list[Message], int]:
+    """
+    Stub out old tool results when a turn nears its budget. Free and deterministic.
+
+    Tool output is the bulk of a coding agent's context and is the easiest thing to
+    get back, because the model can run the same read again.
+    """
+    if not policy.should_compact_tokens(estimate_messages_tokens(messages)):
+        return messages, 0
+
+    out = list(messages)
+    elided = 0
+    for keep in (keep_recent, 1):  # second pass only if still over the whole budget
+        tool_idx = [i for i, m in enumerate(out) if m.role == Role.TOOL]
+        for i in tool_idx[:-keep]:
+            msg = out[i]
+            if len(msg.content) > _ELIDE_MIN_CHARS and _ELIDED not in msg.content:
+                head = msg.content[:_ELIDE_KEEP_CHARS]
+                note = f"\n{_ELIDED} {len(msg.content)} chars; run {msg.name} again if needed]"
+                out[i] = replace(msg, content=head + note)
+                elided += 1
+        if estimate_messages_tokens(out) < policy.context_token_budget:
+            break
+    return out, elided
 
 
 def needs_compaction(memory: ConversationMemory, policy: AgentPolicy) -> bool:

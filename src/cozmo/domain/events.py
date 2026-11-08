@@ -15,6 +15,7 @@ class EventKind(str, Enum):
     USER_TURN = "user_turn"
     ASSISTANT_TURN = "assistant_turn"
     TOOL = "tool"
+    TOOL_INTENT = "tool_intent"
     COMPACT = "compact"
     STOPPED = "stopped"
     SUBAGENT = "subagent"

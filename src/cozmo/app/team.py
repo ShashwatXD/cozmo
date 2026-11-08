@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import re
 import uuid
@@ -21,6 +22,7 @@ from cozmo.domain.team import (
     resolve_agent,
 )
 from cozmo.domain.tools import ToolSpec
+from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.prompts.loader import load_system_prompt
 
 RUN_TEAM_SPEC = ToolSpec(
@@ -62,6 +64,8 @@ RUN_TEAM_SPEC = ToolSpec(
 )
 
 _JSON_OBJ = re.compile(r"\{[\s\S]*\}")
+_MAX_PARALLEL_WORKERS = 4
+_MAX_ORDERS = 8
 
 
 @dataclass(frozen=True)
@@ -153,7 +157,7 @@ def _parse_director_plan(
 
     if not orders:
         return plan or fallback[0], fallback[1]
-    return plan, orders
+    return plan, orders[:_MAX_ORDERS]
 
 
 def synthesize_team_results(
@@ -215,7 +219,9 @@ class TeamService:
         model_name: str = "stub-model",
         depth: int = 0,
         max_tool_result_chars: int = 24_000,
+        tracer: Tracer | None = None,
     ) -> None:
+        self._tracer = tracer
         self._models = models
         self._parent_registry = parent_registry
         self._policy = policy
@@ -238,6 +244,7 @@ class TeamService:
             allowed_tools=allowed_tools_for(agent),
             system_prompt=prompt,
             max_tool_result_chars=self._max_tool_result_chars,
+            tracer=self._tracer,
         )
 
     def _run_worker(self, order: WorkerOrder, *, context: str) -> WorkerResult:
@@ -380,9 +387,12 @@ class TeamService:
             return [self._run_worker(o, context=context) for o in orders]
 
         results: list[WorkerResult | None] = [None] * len(orders)
-        with ThreadPoolExecutor(max_workers=len(orders)) as pool:
+        with ThreadPoolExecutor(max_workers=min(len(orders), _MAX_PARALLEL_WORKERS)) as pool:
+            # copy_context keeps each worker's trace nested under this tool span.
             future_map = {
-                pool.submit(self._run_worker, order, context=context): i
+                pool.submit(
+                    contextvars.copy_context().run, self._run_worker, order, context=context
+                ): i
                 for i, order in enumerate(orders)
             }
             for future in as_completed(future_map):

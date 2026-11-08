@@ -13,6 +13,7 @@ from tenacity import (
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
+    wait_random,
 )
 
 from cozmo.domain.completion import CompletionResult, TransientLLMError
@@ -35,6 +36,19 @@ _MAX_RETRY_AFTER_S = 30.0
 T = TypeVar("T")
 
 
+def _retry_after_hint(exc: BaseException | None) -> float | None:
+    """Read retry-after from our own error type or an SDK response header."""
+    hint = getattr(exc, "retry_after_s", None)
+    if hint is not None:
+        return hint
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    try:
+        return float(headers.get("retry-after")) if headers else None
+    except (TypeError, ValueError):
+        return None
+
+
 class RetryingLLMClient:
     """Decorator that retries transient failures on an inner LLMClient."""
 
@@ -44,19 +58,26 @@ class RetryingLLMClient:
         *,
         max_attempts: int = 3,
         sleep: Callable[[float], None] | None = None,
+        on_retry: Callable[[], None] | None = None,
     ) -> None:
         self._inner = inner
         self._max_attempts = max(1, max_attempts)
         self._sleep = sleep
-        self._backoff = wait_exponential(multiplier=0.5, min=0.5, max=8)
+        self._on_retry = on_retry
+        # Jitter stops many clients from retrying in lockstep after an outage.
+        self._backoff = wait_exponential(multiplier=0.5, min=0.5, max=8) + wait_random(0, 0.5)
 
     def _wait(self, state: RetryCallState) -> float:
         """Honor a provider ``retry-after`` hint, else exponential backoff."""
         exc = state.outcome.exception() if state.outcome else None
-        hint = getattr(exc, "retry_after_s", None)
+        hint = _retry_after_hint(exc)
         if isinstance(hint, (int, float)) and hint > 0:
             return min(float(hint), _MAX_RETRY_AFTER_S)
         return self._backoff(state)
+
+    def _before_sleep(self, _state: RetryCallState) -> None:
+        if self._on_retry is not None:
+            self._on_retry()
 
     def _retry(self, fn: Callable[[], T]) -> T:
         retrying = Retrying(
@@ -65,6 +86,7 @@ class RetryingLLMClient:
             wait=self._wait,
             retry=retry_if_exception_type(_RETRYABLE),
             sleep=self._sleep or time.sleep,
+            before_sleep=self._before_sleep,
         )
         return retrying(fn)
 

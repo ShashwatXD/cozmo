@@ -1,5 +1,7 @@
 """Build LLMClient from Settings."""
 
+from collections.abc import Callable
+
 from cozmo.domain.ports import LLMClient
 from cozmo.infra.llm.anthropic_client import AnthropicClient
 from cozmo.infra.llm.openai_compatible import OpenAICompatibleClient
@@ -12,11 +14,11 @@ _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 _OPENAI_COMPAT = frozenset({"openai", "openrouter"})
 
 
-def build_llm(settings: Settings) -> LLMClient:
+def build_llm(settings: Settings, *, on_retry: Callable[[], None] | None = None) -> LLMClient:
     inner = _build_inner(settings)
     if settings.max_retries <= 1:
         return inner
-    return RetryingLLMClient(inner, max_attempts=settings.max_retries)
+    return RetryingLLMClient(inner, max_attempts=settings.max_retries, on_retry=on_retry)
 
 
 def _compat_base_url(settings: Settings) -> str | None:

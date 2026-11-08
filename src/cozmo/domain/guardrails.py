@@ -14,6 +14,10 @@ class StopReason(str, Enum):
     SESSION_TIMEOUT = "session_timeout"
     MAX_TOOL_CALLS = "max_tool_calls"
     SUBAGENT_DEPTH = "subagent_depth"
+    COST_UNKNOWN = "cost_unknown"
+    STUCK = "stuck"
+    PROVIDER_ERROR = "provider_error"
+    INTERRUPTED = "interrupted"
 
 
 @dataclass(frozen=True)

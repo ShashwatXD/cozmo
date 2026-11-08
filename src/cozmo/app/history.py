@@ -65,6 +65,10 @@ class SessionHistory:
             preview=preview[:500],
         )
 
+    def tool_intent(self, name: str, *, args: dict[str, Any]) -> SessionEvent:
+        """Written before a side effect, so a crash shows what may have happened."""
+        return self.emit(EventKind.TOOL_INTENT, name=name, args=args)
+
     def compact(self, summary: str) -> SessionEvent:
         return self.emit(EventKind.COMPACT, summary=summary[:2000])
 
