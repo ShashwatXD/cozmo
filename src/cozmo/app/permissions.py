@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import difflib
+import glob
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
 
-from cozmo.domain.mode import MUTATING_TOOLS, READ_ONLY_MODES, AgentMode
+from cozmo.domain.mode import READ_ONLY_MODES, AgentMode, requires_approval
 from cozmo.domain.tools import ToolCall, ToolResult
 from cozmo.infra.tools.permission_store import PermissionRule, PermissionStore
 
@@ -29,6 +31,8 @@ class PermissionDecision:
 
 
 AskFn = Callable[[ToolCall, str], PermissionChoice]
+
+_SHELL_CONTROL = re.compile(r"[;&|`<>\n]|\$\(")
 
 
 @dataclass
@@ -50,7 +54,7 @@ class PermissionGate:
         self.mode = mode
 
     def decide(self, call: ToolCall) -> PermissionDecision:
-        if call.name not in MUTATING_TOOLS:
+        if not requires_approval(call.name):
             return PermissionDecision(
                 allowed=True, choice=PermissionChoice.ALLOW_ONCE, reason="read-only"
             )
@@ -70,7 +74,9 @@ class PermissionGate:
                 choice=PermissionChoice.DENY,
                 reason="denied by .cozmo/permissions.json",
             )
-        if _matches_rules(call.name, args, self.store.allow):
+        if not _is_compound_shell(call.name, args) and _matches_rules(
+            call.name, args, self.store.allow
+        ):
             return PermissionDecision(
                 allowed=True,
                 choice=PermissionChoice.ALWAYS_ALLOW,
@@ -104,6 +110,8 @@ def build_preview(workdir: Path, call: ToolCall, args: dict | None = None) -> st
     parsed = args if args is not None else _parse_args(call.arguments)
     if call.name == "write_file":
         return _preview_write(workdir, parsed)
+    if call.name == "edit_file":
+        return _preview_write(workdir, _edit_as_write(workdir, parsed))
     if call.name == "run_shell":
         cmd = str(parsed.get("command") or "")
         return f"cwd: {workdir}\n$ {cmd}"
@@ -144,6 +152,23 @@ def _preview_write(workdir: Path, args: dict) -> str:
     return f"write_file {label}\n{body}{more}"
 
 
+def _edit_as_write(workdir: Path, args: dict) -> dict:
+    """Express an edit as the full new text so it shares the diff preview."""
+    rel = str(args.get("path") or "")
+    path = (workdir / rel).resolve() if rel else None
+    try:
+        text = path.read_text(encoding="utf-8") if path and path.is_file() else ""
+    except OSError:
+        text = ""
+    old, new = str(args.get("old_str") or ""), str(args.get("new_str") or "")
+    return {"path": rel, "content": text.replace(old, new, 1) if old else text}
+
+
+def _is_compound_shell(tool: str, args: dict) -> bool:
+    """Chained commands never match an allow rule: `git *` must not cover `git x; rm y`."""
+    return tool == "run_shell" and bool(_SHELL_CONTROL.search(str(args.get("command") or "")))
+
+
 def _parse_args(raw: str) -> dict:
     try:
         data = json.loads(raw or "{}")
@@ -153,12 +178,13 @@ def _parse_args(raw: str) -> dict:
 
 
 def _rule_for_call(tool: str, args: dict) -> PermissionRule:
-    if tool == "write_file":
-        path = str(args.get("path") or "").strip() or "*"
-        return PermissionRule(tool=tool, path=path)
+    # Escaped so "always allow" covers this exact path or command and nothing wider.
+    if tool in {"write_file", "edit_file"}:
+        path = str(args.get("path") or "").strip()
+        return PermissionRule(tool=tool, path=glob.escape(path) if path else "*")
     if tool == "run_shell":
-        pattern = str(args.get("command") or "").strip() or "*"
-        return PermissionRule(tool=tool, pattern=pattern)
+        command = str(args.get("command") or "").strip()
+        return PermissionRule(tool=tool, pattern=glob.escape(command) if command else "*")
     return PermissionRule(tool=tool)
 
 
@@ -166,7 +192,7 @@ def _matches_rules(tool: str, args: dict, rules: list[PermissionRule]) -> bool:
     for rule in rules:
         if rule.tool != tool:
             continue
-        if tool == "write_file":
+        if tool in {"write_file", "edit_file"}:
             path = str(args.get("path") or "")
             pattern = rule.path or "*"
             if fnmatch(path, pattern):

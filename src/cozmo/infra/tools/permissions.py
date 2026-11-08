@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# .git/hooks runs code on the next commit and .cozmo/ holds the permission rules.
+PROTECTED_DIRS = frozenset({".git", ".cozmo"})
+
 
 class PermissionError_(Exception):
     """Raised when a tool tries to leave the sandbox or use a disabled capability."""
@@ -31,6 +34,14 @@ class WorkspaceGuard:
             candidate.relative_to(self.workdir)
         except ValueError as exc:
             raise PermissionError_(f"Path '{path}' is outside workdir {self.workdir}") from exc
+        return candidate
+
+    def resolve_writable(self, path: str | Path) -> Path:
+        """Like resolve(), and refuses paths that would change Cozmo or git itself."""
+        candidate = self.resolve(path)
+        parts = candidate.relative_to(self.workdir).parts
+        if parts and parts[0] in PROTECTED_DIRS:
+            raise PermissionError_(f"Path '{path}' is inside protected directory {parts[0]}/")
         return candidate
 
     def require_write(self) -> None:

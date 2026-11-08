@@ -43,6 +43,7 @@ USER_CONFIG_KEYS = frozenset(
         "history_rag",
         "trace_enabled",
         "mcp_servers",
+        "model_prices",
     }
 )
 
@@ -64,7 +65,9 @@ def load_project_config(workdir: Path | None = None) -> dict[str, Any]:
 
 def load_merged_file_config(workdir: Path | None = None) -> dict[str, Any]:
     merged = load_user_config()
-    merged.update(load_project_config(workdir))
+    from cozmo.infra.config.trust import filter_project_config
+
+    merged.update(filter_project_config(load_project_config(workdir), workdir))
     return merged
 
 

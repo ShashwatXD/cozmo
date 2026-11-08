@@ -14,6 +14,7 @@ from pydantic_settings import (
 )
 
 from cozmo.infra.config.store import load_merged_file_config
+from cozmo.infra.config.trust import filter_dotenv
 from cozmo.infra.mcp.types import McpServerConfig
 
 
@@ -26,6 +27,23 @@ class _FileJsonSettingsSource(PydanticBaseSettingsSource):
 
     def __call__(self) -> dict[str, Any]:
         return load_merged_file_config(Path.cwd())
+
+
+class _GuardedDotenvSource(PydanticBaseSettingsSource):
+    """Repo-level .env, minus settings that need `cozmo trust` first."""
+
+    def __init__(self, settings_cls: type[BaseSettings], inner: PydanticBaseSettingsSource) -> None:
+        super().__init__(settings_cls)
+        self._inner = inner
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        data = self()
+        if field_name in data:
+            return data[field_name], field_name, True
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        return filter_dotenv(self._inner(), Path.cwd() / ".env")
 
 
 class Settings(BaseSettings):
@@ -76,6 +94,8 @@ class Settings(BaseSettings):
     history_rag: bool = True
     trace_enabled: bool = True
     mcp_servers: list[McpServerConfig] = Field(default_factory=list)
+    # USD per 1M tokens as [input, output], for models Cozmo has no price for.
+    model_prices: dict[str, tuple[float, float]] = Field(default_factory=dict)
 
     @classmethod
     def settings_customise_sources(
@@ -89,7 +109,7 @@ class Settings(BaseSettings):
         return (
             init_settings,
             env_settings,
-            dotenv_settings,
+            _GuardedDotenvSource(settings_cls, dotenv_settings),
             _FileJsonSettingsSource(settings_cls),
             file_secret_settings,
         )

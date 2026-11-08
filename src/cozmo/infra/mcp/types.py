@@ -8,6 +8,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from cozmo.domain.mode import is_mcp_tool
+
+__all__ = ["McpServerConfig", "is_mcp_tool", "mcp_tool_name", "parse_mcp_servers"]
+
 logger = logging.getLogger(__name__)
 
 _NAME_OK = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -58,7 +62,3 @@ def mcp_tool_name(server: str, tool: str) -> str:
     """Stable Cozmo tool id for an MCP tool."""
     safe_tool = re.sub(r"[^A-Za-z0-9_-]+", "_", tool).strip("_") or "tool"
     return f"mcp__{server}__{safe_tool}"
-
-
-def is_mcp_tool(name: str) -> bool:
-    return name.startswith("mcp__")

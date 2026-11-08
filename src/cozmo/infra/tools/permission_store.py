@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from cozmo.infra.config.paths import permissions_path
+from cozmo.infra.config.trust import TrustStore
 
 SCHEMA_VERSION = 1
 
@@ -26,6 +27,7 @@ class PermissionStore:
     allow: list[PermissionRule] = field(default_factory=list)
     deny: list[PermissionRule] = field(default_factory=list)
     path: Path | None = None
+    ignored_allow: int = 0
 
     @classmethod
     def load(cls, workdir: Path) -> PermissionStore:
@@ -39,7 +41,13 @@ class PermissionStore:
             return store
         if not isinstance(data, dict):
             return store
-        store.allow = _parse_rules(data.get("allow"))
+        allow = _parse_rules(data.get("allow"))
+        # Deny rules can only restrict. Allow rules count only if Cozmo wrote this
+        # exact file or the user ran `cozmo trust`, so a repo cannot pre-approve itself.
+        if TrustStore().is_trusted(path):
+            store.allow = allow
+        else:
+            store.ignored_allow = len(allow)
         store.deny = _parse_rules(data.get("deny"))
         return store
 
@@ -56,6 +64,7 @@ class PermissionStore:
             json.dumps(payload, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        TrustStore().trust(self.path)
 
     def add_allow(self, rule: PermissionRule) -> None:
         if not _has_rule(self.allow, rule):

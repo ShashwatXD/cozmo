@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
+import signal
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +58,24 @@ WRITE_SPEC = ToolSpec(
             "content": {"type": "string"},
         },
         "required": ["path", "content"],
+    },
+)
+
+EDIT_SPEC = ToolSpec(
+    name="edit_file",
+    description=(
+        "Replace one exact, unique snippet in a file. Prefer this to write_file for changes "
+        "to existing files: it keeps output small. old_str must match exactly once; include "
+        "surrounding lines if it would otherwise be ambiguous."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "path": {"type": "string"},
+            "old_str": {"type": "string", "description": "Exact text to replace"},
+            "new_str": {"type": "string", "description": "Replacement text"},
+        },
+        "required": ["path", "old_str", "new_str"],
     },
 )
 
@@ -160,6 +183,51 @@ def _as_int(value: Any) -> int | None:
     return None
 
 
+_SECRET_ENV = re.compile(r"API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", re.IGNORECASE)
+
+
+def _scrubbed_env() -> dict[str, str]:
+    """Environment for model-chosen commands, without credentials."""
+    return {k: v for k, v in os.environ.items() if not _SECRET_ENV.search(k)}
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """Write through a temp file so a crash cannot leave a half-written source file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        if path.exists():
+            shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def _run_command(command: str, cwd: Path, timeout_s: float) -> str:
+    """Run in its own process group so a timeout also kills anything it spawned."""
+    proc = subprocess.Popen(
+        command,
+        shell=True,
+        cwd=cwd,
+        env=_scrubbed_env(),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        out, _ = proc.communicate(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        out, _ = proc.communicate()
+        return f"exit=timeout after {timeout_s:g}s (process group killed)\n{out or ''}"
+    return f"exit={proc.returncode}\n{out or ''}"
+
+
 def _read_file_ranged(path: Path, args: dict[str, Any], display_path: str) -> str:
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -209,6 +277,13 @@ def build_default_registry(
 ) -> ToolRegistry:
     """Register default workspace tools (read, write, search, git, optional RAG)."""
     reg = ToolRegistry()
+    edited: set[str] = set()
+
+    def _note_edit(path: Path, text: str) -> None:
+        rel = path.relative_to(guard.workdir).as_posix()
+        edited.add(rel)
+        if sources is not None:
+            sources[rel] = text
 
     def read_file(args: dict[str, Any]) -> str:
         rel = args["path"]
@@ -219,10 +294,28 @@ def build_default_registry(
 
     def write_file(args: dict[str, Any]) -> str:
         guard.require_write()
-        path = guard.resolve(args["path"])
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(args["content"], encoding="utf-8")
+        path = guard.resolve_writable(args["path"])
+        _write_atomic(path, args["content"])
+        _note_edit(path, args["content"])
         return f"Wrote {len(args['content'])} chars to {args['path']}"
+
+    def edit_file(args: dict[str, Any]) -> str:
+        guard.require_write()
+        path = guard.resolve_writable(args["path"])
+        if not path.is_file():
+            raise FileNotFoundError(f"Not a file: {args['path']}")
+        text = path.read_text(encoding="utf-8")
+        old, new = args["old_str"], args["new_str"]
+        count = text.count(old) if old else 0
+        if count == 0:
+            raise ValueError("old_str not found. Read the file again and copy it exactly.")
+        if count > 1:
+            raise ValueError(f"old_str matches {count} places. Include more surrounding lines.")
+        updated = text.replace(old, new, 1)
+        _write_atomic(path, updated)
+        _note_edit(path, updated)
+        line = text[: text.index(old)].count("\n") + 1
+        return f"Edited {args['path']} at line {line}"
 
     def search_repo(args: dict[str, Any]) -> str:
         query = str(args.get("query") or "")
@@ -233,18 +326,7 @@ def build_default_registry(
 
     def run_shell(args: dict[str, Any]) -> str:
         guard.require_shell()
-        command = args["command"]
-        proc = subprocess.run(
-            command,
-            shell=True,
-            cwd=guard.workdir,
-            capture_output=True,
-            text=True,
-            timeout=shell_timeout_s,
-            check=False,
-        )
-        out = (proc.stdout or "") + (proc.stderr or "")
-        return f"exit={proc.returncode}\n{out}"
+        return _run_command(args["command"], guard.workdir, shell_timeout_s)
 
     def git_status(_: dict[str, Any]) -> str:
         return _git(guard.workdir, ["status", "--short"])
@@ -252,8 +334,11 @@ def build_default_registry(
     def git_diff(args: dict[str, Any]) -> str:
         cmd = ["diff"]
         if args.get("path"):
-            guard.resolve(args["path"])
-            cmd.append(args["path"])
+            rel = str(args["path"])
+            if rel.startswith("-"):
+                raise ValueError("path must not start with '-'")
+            guard.resolve(rel)
+            cmd.extend(["--", rel])
         return _git(guard.workdir, cmd)
 
     def semantic_search(args: dict[str, Any]) -> str:
@@ -275,7 +360,10 @@ def build_default_registry(
         lines: list[str] = []
         for h in hits:
             preview = h.text[:800]
-            lines.append(f"score={h.score:.3f} {h.path}:{h.start_line}-{h.end_line}\n{preview}")
+            stale = " [edited this session: verify with read_file]" if h.path in edited else ""
+            lines.append(
+                f"score={h.score:.3f} {h.path}:{h.start_line}-{h.end_line}{stale}\n{preview}"
+            )
         return "\n---\n".join(lines)
 
     def search_history(args: dict[str, Any]) -> str:
@@ -289,6 +377,7 @@ def build_default_registry(
 
     reg.register(READ_SPEC, read_file)
     reg.register(WRITE_SPEC, write_file)
+    reg.register(EDIT_SPEC, edit_file)
     reg.register(SEARCH_SPEC, search_repo)
     reg.register(SEMANTIC_SPEC, semantic_search)
     reg.register(HISTORY_SEARCH_SPEC, search_history)

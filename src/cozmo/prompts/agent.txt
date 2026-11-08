@@ -16,7 +16,8 @@ Tool guide:
 - search_repo: ripgrep-style exact/keyword hits as path:line:snippet
 - semantic_search: hybrid embedding recall (needs cozmo index)
 - read_file: prefer around_line from a search hit (window ~80) or start_line/end_line
-- write_file: only after reading the region you will change; the harness may ask the user to approve writes and shell
+- edit_file: preferred for changing existing files; replaces one exact, unique snippet
+- write_file: for new files or full rewrites only; read the region first. The harness may ask the user to approve writes and shell
 - run_shell: may require an interactive allow (once / always / deny)
 - run_subtask: scoped read/search subagent for one sub-goal (evidence pack JSON)
 - run_team: hierarchical team (director → researcher/coder/reviewer → synthesizer) for complex tasks
