@@ -22,8 +22,9 @@ Most coding agents either hide the loop behind a framework or paste whole files 
 It is built around three rules:
 
 1. **Find before you read.** Exact names go through ripgrep. Vague questions go through hybrid semantic search. Files are read in line ranges, not whole.
-2. **Nothing mutating runs without consent.** Writes and shell commands show a preview first, and you choose *allow once*, *always allow* or *deny*.
-3. **Every run has hard limits.** Steps, tool calls, dollars and wall-clock time are all capped, and a stuck detector breaks repeating tool loops.
+2. **Nothing mutating runs without consent.** Writes, shell commands and MCP tools ask first, and you choose *allow once*, *always allow* or *deny*.
+3. **Every run has hard limits.** Steps, tool calls, dollars and wall-clock time are all capped, and a stuck detector warns and then stops repeating tool loops.
+4. **If you cannot measure it, it is not done.** Every model and tool call is traced, and offline evals test capability, safety and failure handling in CI.
 
 ## Core Features
 
@@ -31,15 +32,19 @@ It is built around three rules:
 |---|---|
 | **Owned ReAct Loop** | A plain Python agent loop: model → tool calls → observations → repeat, with a typed stop reason on every run. |
 | **Hybrid Code Search** | BM25 and embeddings fused with Reciprocal Rank Fusion, then a lexical reranker. Benchmarked below. |
-| **Multi-Model Routing** | A strong *orchestrator* model for planning and summaries, and an optional cheaper *worker* model for tool calls. |
+| **Multi-Model Routing** | An *orchestrator* model for compaction, team planning and synthesis, and an optional cheaper *worker* model that runs the tool loop. |
 | **Subagents and Teams** | `run_subtask` sends out a read-only child agent that returns a compact evidence pack. `run_team` runs a director → researcher/coder/reviewer → synthesizer pipeline. |
-| **Permission Gate** | Diff preview before writes, the full command before shell. Rules are saved per project in `.cozmo/permissions.json`. |
-| **Guardrails** | Hard stops on steps, tool calls, cost (USD) and session time. Context is compacted automatically at about 70% of budget. |
-| **Stuck Detector** | Spots repeated identical calls, repeated identical errors and A/B ping-pong, then pushes the model to change course. |
+| **Permission Gate** | Diff preview before writes, the full command before shell, approval for MCP tools. Chained shell commands never match an allow rule. |
+| **Repo Trust** | Settings that could run code or redirect your key only apply after `cozmo trust`, and are pinned to the file's hash. |
+| **Guardrails** | Hard stops on steps, tool calls and time per turn, plus one cost ledger for the whole session including subagents. Old tool output is trimmed during a turn and older turns are summarized between turns. |
+| **Stuck Detector** | Spots repeated identical calls, repeated identical errors and A/B ping-pong, gives the model one hint, then stops the run. |
+| **Observability** | Nested spans for every turn, model call, tool and approval. `cozmo trace` shows one run as a tree and `cozmo stats` shows health over time. |
+| **Agent Evals** | `cozmo eval` runs task, safety and chaos suites offline. Add `--live --repeat 5` for real-model pass rates, and `--baseline` to catch regressions. |
+| **Crash Recovery** | Each step is checkpointed. `/continue` restores an unfinished turn with its tool results. |
 | **Modes** | `/ask` (read-only explain), `/plan` (explore, then propose) and `/agent` (full tools). |
-| **Sessions** | Every turn is logged as JSONL. `/continue` resumes a session, `/export md\|json` writes an audit trail, and `search_history` searches past turns. |
+| **Sessions** | Every turn is logged as JSONL, with an intent record before each side effect. `/export md\|json` writes an audit trail and `search_history` searches past turns. |
 | **MCP Client** | Connects any Model Context Protocol server over stdio. Its tools appear as `mcp__{server}__{tool}`. |
-| **Groundedness Eval** | Checks every claim and `path:line` citation in an answer against the code that was actually retrieved. |
+| **Groundedness Check** | An eval-time check of claims and `path:line` citations against the code that was actually retrieved. It uses word overlap, so treat it as a cheap regression signal. |
 | **Any Provider** | OpenAI, Anthropic, OpenRouter, Ollama, or any OpenAI-compatible `base_url`. Bring your own key. |
 
 ## How It Works
@@ -84,8 +89,6 @@ All numbers below are reproducible with `python benchmarks/run_retrieval.py`. Th
 | Recall@5 | 0.93 | **0.98** |
 | MRR@10 | 0.708 | **0.868** |
 | `semantic_search` latency, p50 | 64.4 ms | **2.5 ms** |
-| Embedding requests to index the corpus | 99 | **10** |
-| Full index time (local Ollama, uncached) | 25.6 s | **21.6 s** |
 
 **By strategy (after):**
 
@@ -102,7 +105,9 @@ What changed:
 - **Latency.** BM25 used to be rebuilt over the whole repository on every tool call. It is now an inverted index cached per store version. Vector search was a pure-Python loop and is now a single numpy matrix-vector product.
 - **Indexing.** Embedding requests are batched across files instead of one or more per file. A failing file is retried on its own so it cannot break the rest.
 
-Raw reports are in [`benchmarks/results/`](benchmarks/results). CI runs the same benchmark offline (with a deterministic stub embedder) as a quality gate, so ranking regressions fail the build.
+Latency uses an in-memory store with cached query embeddings, so it measures retrieval alone. A live search also pays for one embedding request. The 43 queries were also used while tuning, so treat the scores as a regression signal for this repository.
+
+Raw reports are in [`benchmarks/results/`](benchmarks/results). CI runs the same benchmark offline with a deterministic stub embedder as a quality gate, so lexical, fusion and rerank regressions fail the build.
 
 ## Tech Stack
 
@@ -112,7 +117,7 @@ Raw reports are in [`benchmarks/results/`](benchmarks/results). CI runs the same
 - **Retrieval**: Chroma (HNSW), numpy, a custom BM25 inverted index, Reciprocal Rank Fusion
 - **Reliability**: tenacity retries with `retry-after` support, pydantic-settings
 - **Tooling**: ripgrep, Model Context Protocol (`mcp`)
-- **Quality**: pytest (188 tests), ruff, mypy, a coverage gate, and GitHub Actions on Python 3.11–3.13
+- **Quality**: pytest (209 tests), ruff, mypy, a coverage gate, and GitHub Actions on Python 3.11–3.13
 
 ## Project Structure
 
@@ -137,7 +142,7 @@ cozmo/
 └── website/                 # project site
 ```
 
-Dependencies point inward: `cli → app → domain ← infra`. The domain layer never imports a provider SDK.
+`domain` holds pure rules and types and imports nothing from the other layers or any SDK, which a test enforces. `app` composes `infra` directly at a few seams.
 
 ## Getting Started
 
@@ -201,7 +206,10 @@ Each turn ends with a footer showing tokens, estimated cost, `ctx≈N/budget`, s
 | `cozmo` / `cozmo agent` | Interactive agent |
 | `cozmo chat` | Plain chat, no tools |
 | `cozmo index` | Rebuild the code index |
-| `cozmo eval` | Golden agent tasks + groundedness / citation eval |
+| `cozmo eval` | Golden, task, safety and chaos evals. Options: `--live`, `--repeat`, `--json`, `--baseline`, `--record`, `--replay` |
+| `cozmo trace [id\|last]` | List recent turns, or show one as a span tree |
+| `cozmo stats` | Completion rate, latency, cost, tool errors and approvals |
+| `cozmo trust` | Allow this repo's `.cozmo` config, permissions and `.env` |
 | `cozmo doctor` | Show the effective settings |
 | `cozmo config --show` | Print config (keys masked) |
 
@@ -209,6 +217,10 @@ Each turn ends with a footer showing tokens, estimated cost, `ctx≈N/budget`, s
 <summary><b>Configuration reference</b></summary>
 
 Precedence, highest first: CLI flags → `COZMO_*` env → `.env` → `<repo>/.cozmo/config.json` → `~/.cozmo/config.json` → defaults.
+
+A repo is untrusted until you run `cozmo trust`. Until then its config can only set harmless options such as `model` and `temperature`, its `.env` cannot change `base_url`, `allow_shell`, `allow_write` or `mcp_servers`, and its saved allow rules are ignored. Editing a trusted file ends the trust for that file.
+
+For `max_cost_usd`, Cozmo stops rather than guess when a model has no known price. Add one with `"model_prices": {"model-name": [input_per_1m, output_per_1m]}`.
 
 ```json
 {
@@ -231,7 +243,9 @@ Precedence, highest first: CLI flags → `COZMO_*` env → `.env` → `<repo>/.c
 | `<repo>/.cozmo/chroma/`, `index.json` | Code vector index |
 | `<repo>/.cozmo/history/*.jsonl` | Session events |
 | `<repo>/.cozmo/permissions.json` | Saved allow / deny rules |
-| `<repo>/.cozmo/traces.jsonl` | LLM and tool telemetry |
+| `<repo>/.cozmo/traces.jsonl` | Spans for model calls, tools and approvals (no file contents) |
+| `<repo>/.cozmo/checkpoints/` | Recovery point for an unfinished turn |
+| `~/.cozmo/trust.json` | Hashes of repo files you have trusted |
 
 </details>
 
@@ -251,7 +265,7 @@ Add to `~/.cozmo/config.json` or `<repo>/.cozmo/config.json`:
 ]
 ```
 
-A server that fails to start is skipped with a warning, and the others still connect. MCP tools are hidden in `/ask` and `/plan`. Set `COZMO_MCP_DISABLED=1` to turn MCP off.
+A server that fails to start is skipped with a warning, and the others still connect. MCP tools ask for approval, and are blocked in `/ask` and `/plan`. Servers listed in a repo's own config need `cozmo trust`. Set `COZMO_MCP_DISABLED=1` to turn MCP off.
 </details>
 
 ## Development
@@ -262,7 +276,7 @@ cd cozmo
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,mcp]"
 
-pytest --cov=cozmo                     # 188 tests, offline, coverage gate at 75%
+pytest --cov=cozmo                     # 209 tests, offline, coverage gate at 75%
 ruff check . && ruff format --check .  # lint + format
 mypy                                   # type-check
 cozmo eval                             # golden agent eval
@@ -274,7 +288,8 @@ Set `COZMO_DEBUG_CURL=1` to print each LLM request as a ready-to-run `curl` comm
 ## Privacy
 
 - Your code index, sessions and permissions stay in `.cozmo/` inside your repository. Your key stays in `~/.cozmo/config.json`, readable only by you.
-- Tools cannot read or write outside the workspace root. Shell access is off until you turn it on.
+- File tools cannot leave the workspace root or write inside `.git/` or `.cozmo/`.
+- Shell access is off until you turn it on. Commands run in the workspace without credential environment variables, but they are not sandboxed, so review them before approving. Use a container for untrusted repositories.
 - Code is sent only to the model provider you configured. With Ollama, nothing leaves your machine.
 
 ## Contributing

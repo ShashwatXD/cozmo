@@ -101,6 +101,26 @@ Ship items that support the thesis. Skip cosmetic work that does not improve con
 
 ---
 
+## Phase 4.5: Production hardening
+
+- [x] Repo trust: sensitive project config, `.env` and allow rules need `cozmo trust`, pinned by hash
+- [x] MCP tools need approval and are refused at execution in read-only modes
+- [x] Chained shell commands never match allow rules; shell runs without credential env vars
+- [x] `edit_file` tool, atomic writes, protected `.git/` and `.cozmo/`
+- [x] One usage ledger across compaction, teams and subagents; unknown price fails closed
+- [x] Turn budgets, in-turn context trimming, output-limit handling, stuck hard stop
+- [x] Span traces, `cozmo trace`, `cozmo stats`
+- [x] Task, safety and chaos evals, baselines, record and replay
+- [x] Per-step checkpoints and tool intent log
+- [x] Index refresh on launch
+- [ ] OS-level sandbox for `run_shell`
+- [ ] OTLP trace export
+- [ ] Streaming answers
+- [ ] Prompt caching
+- [ ] Held-out retrieval queries from another repository
+
+---
+
 ## Phase 5: Leapfrog features (after foundation)
 
 Differentiation after Phase 1 is solid. Not a peer parity list.
@@ -109,7 +129,7 @@ Differentiation after Phase 1 is solid. Not a peer parity list.
 - [ ] **Confidence-gated answers**: weak citations trigger further investigation or an explicit refusal to invent — **partial:** `score_groundedness()` in eval; not in agent loop
 - [ ] **Dual-index fusion**: ripgrep and semantic hits as one ranked evidence stream, enforced by the harness
 - [ ] **Context compiler**: before each LLM call, pin the goal and citations; compress prior tool output to fingerprints (example: `agent.py:40-90`)
-- [ ] **Eval gate**: golden find and read tasks; harness regressions fail CI — **partial:** golden + groundedness/citation suites in `cozmo eval`
+- [x] **Eval gate**: golden, task, safety and chaos suites run in CI and harness regressions fail the build
 
 **Exit criteria:** Model input is compiled evidence under harness control, with evals that detect retrieval and context regressions.
 
