@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from datetime import UTC
@@ -14,16 +15,18 @@ from cozmo import __version__
 from cozmo.app.agent import AgentRunner
 from cozmo.app.chat import ChatUseCase
 from cozmo.app.context_meter import context_meter
+from cozmo.app.eval_agent import SUITES, compare_to_baseline, report_to_json, run_agent_evals
 from cozmo.app.eval_runner import run_eval
 from cozmo.app.history import SessionHistory
 from cozmo.app.model_router import build_llm_bundle
 from cozmo.app.permissions import PermissionChoice, PermissionGate
 from cozmo.app.subagent import SubAgentService, register_subagent_tool
 from cozmo.app.team import TeamService, register_team_tool
+from cozmo.app.trace_report import list_turns, load_trace_events, render_turn, summarize
 from cozmo.cli import ux
 from cozmo.cli.setup_wizard import run_setup
 from cozmo.domain.completion import Usage
-from cozmo.domain.cost import format_cost_line
+from cozmo.domain.cost import UsageLedger, format_cost_line, price_known
 from cozmo.domain.guardrails import AgentPolicy
 from cozmo.domain.memory import ConversationMemory
 from cozmo.domain.mode import AgentMode
@@ -35,7 +38,9 @@ from cozmo.infra.config.paths import (
     workspace_dir,
 )
 from cozmo.infra.config.store import load_user_config, save_user_config
+from cozmo.infra.config.trust import TrustStore, ignored_project_keys
 from cozmo.infra.history import HistoryRagIndex, JsonlEventStore
+from cozmo.infra.history.checkpoint import CheckpointStore
 from cozmo.infra.history.null import NullEventStore
 from cozmo.infra.llm.factory import build_llm
 from cozmo.infra.rag import RepoIndexer
@@ -147,10 +152,12 @@ def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -
         backend_name = "json"
     if backend_name == "chroma":
         backend = build_vector_store(settings, root_dir)
-        backend.clear()
-        for chunk, emb in store.items():
-            backend.add(chunk, emb)
-        backend.save(out)
+        changed = report.files_embedded or report.files_removed or len(backend) != len(store)
+        if changed:
+            backend.clear()
+            for chunk, emb in store.items():
+                backend.add(chunk, emb)
+            backend.save(out)
         dest = f"{out} + chroma/"
     else:
         store.save(out)
@@ -186,8 +193,9 @@ def _build_indexes(root_dir: Path, settings: Settings, *, quiet: bool = False) -
 def _ensure_index(root_dir: Path, settings: Settings, *, auto_index: bool) -> None:
     if not auto_index:
         return
-    rag = index_path(root_dir)
-    if rag.is_file():
+    if index_path(root_dir).is_file():
+        # Hashing is cheap and only changed files are embedded again.
+        _build_indexes(root_dir, settings, quiet=True)
         return
     ux.print_dim("First time in this repo — indexing…")
     _build_indexes(root_dir, settings, quiet=False)
@@ -219,6 +227,7 @@ def _run_agent_session(
     resume_session_id: str | None = None,
 ) -> None:
     _ensure_index(root_dir, settings, auto_index=auto_index)
+    _warn_untrusted(root_dir)
 
     guard = WorkspaceGuard(
         root_dir,
@@ -272,16 +281,18 @@ def _run_agent_session(
         if n:
             ux.print_dim(f"mcp: registered {n} tool(s) from {len(mcp_manager.tools)} listed")
     executor = ToolExecutor(registry, max_chars=settings.max_tool_result_chars)
-    models = build_llm_bundle(settings)
-    memory = ConversationMemory(max_messages=settings.memory_max_messages)
     trace_path = root_dir / ".cozmo" / "traces.jsonl"
     tracer = Tracer(
         trace_path if settings.trace_enabled else None,
         enabled=settings.trace_enabled,
     )
+    ledger = UsageLedger(settings.model_prices)
+    models = build_llm_bundle(settings, ledger=ledger, tracer=tracer)
+    memory = ConversationMemory(max_messages=settings.memory_max_messages)
+    checkpoints = CheckpointStore(root_dir, enabled=settings.history_enabled)
     history = SessionHistory(event_store, rag_index=history_rag)
     if resume_session_id:
-        if not _resume_into(history, memory, resume_session_id):
+        if not _resume_into(history, memory, resume_session_id, checkpoints):
             ux.print_err(f"session not found: {resume_session_id}")
             raise typer.Exit(code=1)
         ux.print_dim(f"resumed session {history.session_id}")
@@ -302,6 +313,7 @@ def _run_agent_session(
             temperature=settings.temperature,
             model_name=settings.worker_model or settings.model,
             max_tool_result_chars=settings.max_tool_result_chars,
+            tracer=tracer,
         ),
     )
     register_team_tool(
@@ -314,6 +326,7 @@ def _run_agent_session(
             temperature=settings.temperature,
             model_name=settings.worker_model or settings.model,
             max_tool_result_chars=settings.max_tool_result_chars,
+            tracer=tracer,
         ),
     )
     perm_store = PermissionStore.load(root_dir)
@@ -337,7 +350,14 @@ def _run_agent_session(
         model_name=settings.worker_model or settings.model,
         permission_gate=gate,
         mode=mode,
+        checkpoints=checkpoints,
     )
+    if perm_store.ignored_allow:
+        typer.secho(
+            f"  ignored {perm_store.ignored_allow} allow rule(s) in .cozmo/permissions.json "
+            "(not trusted). Review it, then run: cozmo trust",
+            fg="yellow",
+        )
 
     typer.echo()
     ux.print_banner(clear=message is None)
@@ -433,7 +453,7 @@ def _run_agent_session(
                 if not sid:
                     ux.print_dim("no sessions to continue")
                     continue
-                if not _resume_into(history, memory, sid):
+                if not _resume_into(history, memory, sid, checkpoints):
                     ux.print_err(f"session not found: {sid}")
                     continue
                 ux.print_dim(f"resumed session {history.session_id} ({len(memory)} msgs)")
@@ -461,6 +481,7 @@ def _resume_into(
     history: SessionHistory,
     memory: ConversationMemory,
     session_id: str,
+    checkpoints: CheckpointStore | None = None,
 ) -> bool:
     from cozmo.app.session_resume import hydrate_memory_from_events
 
@@ -469,7 +490,22 @@ def _resume_into(
         return False
     history.attach(session_id)
     hydrate_memory_from_events(events, memory)
+    # A checkpoint exists only if the last turn never finished, and it has the tool results.
+    recovered = checkpoints.load(session_id) if checkpoints else None
+    if recovered:
+        memory.replace_history(recovered)
+        ux.print_dim(f"recovered an unfinished turn ({len(recovered)} messages)")
     return True
+
+
+def _warn_untrusted(root_dir: Path) -> None:
+    ignored = ignored_project_keys(root_dir)
+    if ignored:
+        typer.secho(
+            f"  ignored in .cozmo/config.json (not trusted): {', '.join(ignored)}. "
+            "Review it, then run: cozmo trust",
+            fg="yellow",
+        )
 
 
 def _print_sessions(history: SessionHistory) -> None:
@@ -700,35 +736,150 @@ def eval_cmd(
         None,
         "--workdir",
         "-w",
-        help="Fixture repo (default: tests/fixtures/tiny_repo)",
+        help="Fixture repo for golden cases (default: tests/fixtures/tiny_repo)",
     ),
     live: bool = typer.Option(
         False,
         "--live",
-        help="Use configured LLM provider instead of stub scripts",
+        help="Use the configured model instead of scripted replies (costs money)",
+    ),
+    suite: str = typer.Option("all", "--suite", help="all, golden, tasks, safety or chaos"),
+    repeat: int = typer.Option(1, "--repeat", help="Runs per case. Use 5+ with --live"),
+    json_out: Path | None = typer.Option(None, "--json", help="Write the report here"),
+    baseline: Path | None = typer.Option(
+        None, "--baseline", help="Fail if results regress against this saved report"
+    ),
+    record: Path | None = typer.Option(
+        None, "--record", help="With --live, save model replies to this folder"
+    ),
+    replay: Path | None = typer.Option(
+        None, "--replay", help="Re-run saved model replies offline against current code"
     ),
 ) -> None:
-    """Run golden-task eval suite (CI-safe stub by default)."""
+    """Golden, capability, safety and chaos evals (offline unless --live)."""
     settings = load_settings()
-    root = workdir or Path("tests/fixtures/tiny_repo")
-    root = root.resolve()
-    results = run_eval(root, settings=settings, live=live)
-    passed = sum(1 for r in results if r.passed)
-    for r in results:
-        mark = "PASS" if r.passed else "FAIL"
-        prefix = f"[{r.suite}]" if r.suite != "golden" else "[golden]"
+    failed = 0
+    if suite in {"all", "golden"} and not replay:
+        root = (workdir or Path("tests/fixtures/tiny_repo")).resolve()
+        for r in run_eval(root, settings=settings, live=live):
+            failed += 0 if r.passed else 1
+            typer.secho(
+                f"[{r.suite}] [{'PASS' if r.passed else 'FAIL'}] {r.case_id}: {r.detail[:120]}",
+                fg="green" if r.passed else "red",
+            )
+
+    names = SUITES if suite == "all" else tuple(s for s in SUITES if s == suite)
+    reports = run_agent_evals(
+        names,
+        settings=settings,
+        live=live,
+        repeat=repeat,
+        record_dir=record,
+        replay_dir=replay,
+    )
+    for rep in reports:
+        ok = rep.passes == rep.runs
+        failed += 0 if ok else 1
+        note = f"{rep.passes}/{rep.runs}" if rep.runs > 1 else ("" if ok else rep.failures[0])
+        drift = f" drift={rep.drift}" if rep.drift else ""
         typer.secho(
-            f"{prefix} [{mark}] {r.case_id}: {r.detail[:140]}",
-            fg="green" if r.passed else "red",
+            f"[{rep.suite}] [{'PASS' if ok else 'FAIL'}] {rep.case_id} {note}{drift}",
+            fg="green" if ok else "red",
         )
-    golden = [r for r in results if r.suite == "golden"]
-    grounded = [r for r in results if r.suite == "groundedness"]
-    typer.echo(f"\n{passed}/{len(results)} passed")
-    if grounded:
-        typer.echo(f"  golden: {sum(1 for r in golden if r.passed)}/{len(golden)}")
-        typer.echo(f"  groundedness: {sum(1 for r in grounded if r.passed)}/{len(grounded)}")
-    if passed != len(results):
+    for name in names:
+        rows = [r for r in reports if r.suite == name]
+        if rows:
+            typer.echo(f"  {name}: {sum(r.passes for r in rows)}/{sum(r.runs for r in rows)} runs")
+    if live:
+        typer.echo(f"  cost: ${sum(r.mean_cost_usd * r.runs for r in reports):.4f}")
+
+    data = report_to_json(reports)
+    if json_out:
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        json_out.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    if baseline:
+        problems = compare_to_baseline(reports, json.loads(baseline.read_text(encoding="utf-8")))
+        for problem in problems:
+            typer.secho(f"  regression: {problem}", fg="red")
+        failed += len(problems)
+    if failed:
         raise typer.Exit(code=1)
+
+
+@app.command("trace")
+def trace_cmd(
+    turn_id: str | None = typer.Argument(None, help="Turn id prefix, or 'last'"),
+    workdir: Path | None = typer.Option(None, "--workdir", "-w"),
+) -> None:
+    """List recent turns, or show one as a span tree."""
+    events = load_trace_events((workdir or Path.cwd()).resolve() / ".cozmo" / "traces.jsonl")
+    if turn_id:
+        lines = render_turn(events, turn_id)
+        if not lines:
+            ux.print_err(f"no trace for {turn_id}")
+            raise typer.Exit(code=1)
+        for line in lines:
+            typer.echo(line)
+        return
+    for t in list_turns(events):
+        typer.echo(
+            f"{t['turn_id']}  {t['stop']:<16} steps={t['steps']} tools={t['tools']} "
+            f"tokens={t['tokens']} ${t['cost_usd']:.4f} {t['ms'] / 1000:.1f}s"
+        )
+
+
+@app.command("stats")
+def stats_cmd(
+    last: int | None = typer.Option(None, "--last", help="Only the most recent N turns"),
+    workdir: Path | None = typer.Option(None, "--workdir", "-w"),
+    as_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Health of recent runs: completion, latency, cost, tool errors, approvals."""
+    events = load_trace_events((workdir or Path.cwd()).resolve() / ".cozmo" / "traces.jsonl")
+    s = summarize(events, last=last)
+    if as_json:
+        typer.echo(json.dumps(s, indent=2))
+        return
+    typer.echo(f"turns            {s['turns']}  completed {s['completed_rate']:.0%}")
+    typer.echo(f"stop reasons     {s['stop_reasons']}")
+    typer.echo(
+        f"turn latency     p50 {s['turn_ms_p50'] / 1000:.1f}s  p95 {s['turn_ms_p95'] / 1000:.1f}s"
+    )
+    typer.echo(
+        f"model latency    p50 {s['llm_ms_p50'] / 1000:.1f}s  p95 {s['llm_ms_p95'] / 1000:.1f}s"
+    )
+    typer.echo(f"model errors     {s['llm_errors']}  retries {s['retries']}")
+    typer.echo(f"cost             ${s['cost_usd']:.4f}")
+    for model, row in s["by_model"].items():
+        typer.echo(
+            f"  {model}: {row['calls']:.0f} calls, in {row['input_tokens']:.0f}, "
+            f"out {row['output_tokens']:.0f}, ${row['cost_usd']:.4f}"
+        )
+    typer.echo(f"approvals        allowed {s['approvals_allowed']}  denied {s['approvals_denied']}")
+    typer.echo(
+        f"context          compactions {s['compactions']}  shrinks {s['context_shrinks']}  "
+        f"truncated outputs {s['truncated_outputs']}"
+    )
+    typer.echo(f"stuck loops      {s['stuck']}")
+    for tool, row in sorted(s["by_tool"].items()):
+        typer.echo(f"  {tool}: {row['calls']:.0f} calls, {row['errors']:.0f} errors")
+
+
+@app.command("trust")
+def trust_cmd(
+    workdir: Path | None = typer.Option(None, "--workdir", "-w"),
+    revoke: bool = typer.Option(False, "--revoke", help="Stop trusting this repo's files"),
+) -> None:
+    """Allow this repo's .cozmo config, permissions and .env. Review them first."""
+    root = (workdir or Path.cwd()).resolve()
+    trust = TrustStore()
+    files = [project_config_path(root), workspace_dir(root) / "permissions.json", root / ".env"]
+    for file in (f for f in files if f.is_file()):
+        if revoke:
+            trust.revoke(file)
+        else:
+            trust.trust(file)
+        typer.echo(f"{'revoked' if revoke else 'trusted'} {file}")
 
 
 @app.command("setup")
@@ -852,6 +1003,14 @@ def doctor_cmd() -> None:
     typer.echo(f"api_key:          {'set' if settings.api_key else 'not set'}")
     typer.echo(f"allow_write:      {settings.allow_write}")
     typer.echo(f"allow_shell:      {settings.allow_shell}")
+    ignored = ignored_project_keys(work)
+    if ignored:
+        typer.secho(f"not trusted:      {', '.join(ignored)} (run: cozmo trust)", fg="yellow")
+    priced = price_known(settings.worker_model or settings.model, settings.model_prices)
+    if settings.max_cost_usd is not None and not priced:
+        typer.secho(
+            "cost cap:         no price for this model, add it to model_prices", fg="yellow"
+        )
     if (Path.cwd() / ".env").is_file():
         typer.echo("")
         typer.secho(
@@ -942,6 +1101,10 @@ def _agent_once(
                 act.stop()
                 ux.print_dim(f"  ✗ {event.tool_name}: {event.text}")
                 act.thinking()
+            elif event.kind == "truncated":
+                act.stop()
+                ux.print_dim("  output limit hit, continuing")
+                act.thinking()
             elif event.kind == "stuck":
                 act.stop()
                 ux.print_dim(f"  ⚠ stuck: {event.text}")
@@ -968,6 +1131,10 @@ def _agent_once(
                 act.stop()
                 if event.text:
                     typer.echo(event.text)
+    except KeyboardInterrupt:
+        act.stop()
+        ux.print_dim("interrupted")
+        return
     except Exception as exc:
         from cozmo.cli import ux as _ux
 
@@ -982,7 +1149,7 @@ def _agent_once(
     if result:
         _print_meter(
             settings.provider,
-            settings.model,
+            settings.worker_model or settings.model,
             result.usage,
             runner=runner,
             compacted=compacted,
@@ -1012,6 +1179,8 @@ def _print_meter(
             system_prompt=runner.system_prompt,
         )
         bits.append(meter.format_line())
+        if runner.ledger.total_cost:
+            bits.append(f"session ${runner.ledger.total_cost:.4f}")
         if compacted and "compacted" not in meter.format_line():
             bits.append("compacted")
     if bits:
