@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from datetime import UTC
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,7 @@ from cozmo import __version__
 from cozmo.app.agent import AgentRunner
 from cozmo.app.chat import ChatUseCase
 from cozmo.app.context_meter import context_meter
-from cozmo.app.eval_runner import run_eval
+from cozmo.app.eval_runner import run_eval, save_eval_run
 from cozmo.app.history import SessionHistory
 from cozmo.app.model_router import build_llm_bundle
 from cozmo.app.permissions import PermissionChoice, PermissionGate
@@ -264,11 +265,6 @@ def _run_agent_session(
     executor = ToolExecutor(registry, max_chars=settings.max_tool_result_chars)
     models = build_llm_bundle(settings)
     memory = ConversationMemory(max_messages=settings.memory_max_messages)
-    trace_path = root_dir / ".cozmo" / "traces.jsonl"
-    tracer = Tracer(
-        trace_path if settings.trace_enabled else None,
-        enabled=settings.trace_enabled,
-    )
     history = SessionHistory(event_store, rag_index=history_rag)
     if resume_session_id:
         if not _resume_into(history, memory, resume_session_id):
@@ -282,6 +278,12 @@ def _run_agent_session(
             worker_model=settings.worker_model or settings.model,
             workdir=str(root_dir),
         )
+    trace_path = root_dir / ".cozmo" / "traces.jsonl"
+    tracer = Tracer(
+        trace_path if settings.trace_enabled else None,
+        enabled=settings.trace_enabled,
+        session_id=history.session_id,
+    )
     register_subagent_tool(
         registry,
         SubAgentService(
@@ -702,7 +704,18 @@ def eval_cmd(
     settings = load_settings()
     root = workdir or Path("tests/fixtures/tiny_repo")
     root = root.resolve()
-    results = run_eval(root, settings=settings, live=live)
+    # Runs and their traces are saved next to where you ran the command, for `cozmo trace`.
+    store = Path.cwd() / ".cozmo"
+    tracer = Tracer(store / "traces.jsonl", session_id=f"eval-{time.strftime('%Y%m%d-%H%M%S')}")
+    results = run_eval(root, settings=settings, live=live, tracer=tracer)
+    saved = save_eval_run(
+        results,
+        store / "evals",
+        live=live,
+        provider=settings.provider,
+        model=settings.model,
+        session_id=tracer.session_id,
+    )
     passed = sum(1 for r in results if r.passed)
     for r in results:
         mark = "PASS" if r.passed else "FAIL"
@@ -713,7 +726,7 @@ def eval_cmd(
         )
     golden = [r for r in results if r.suite == "golden"]
     grounded = [r for r in results if r.suite == "groundedness"]
-    typer.echo(f"\n{passed}/{len(results)} passed")
+    typer.echo(f"\n{passed}/{len(results)} passed  (saved to {saved}; open with: cozmo trace)")
     if grounded:
         typer.echo(f"  golden: {sum(1 for r in golden if r.passed)}/{len(golden)}")
         typer.echo(f"  groundedness: {sum(1 for r in grounded if r.passed)}/{len(grounded)}")

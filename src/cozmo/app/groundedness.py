@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 CITATION_RE = re.compile(r"([A-Za-z0-9_@./-]+\.[A-Za-z]{1,6})(?::(\d+)(?:\s*[-–]\s*(\d+))?)?")
 
@@ -262,6 +263,20 @@ def score_groundedness(
         },
         summary=summary,
     )
+
+
+def contexts_from_messages(messages: list[Any]) -> list[GroundingContext]:
+    """Grounding contexts from the tool results in *messages*, matched to their calls."""
+    calls: dict[str, tuple[str, str]] = {}
+    contexts: list[GroundingContext] = []
+    for m in messages:
+        if getattr(m, "tool_calls", None):
+            for tc in m.tool_calls:
+                calls[tc.id] = (tc.name, tc.arguments)
+        elif getattr(m, "tool_call_id", None) and m.tool_call_id in calls:
+            name, args = calls[m.tool_call_id]
+            contexts.extend(contexts_from_tool_results(name, args, m.content or ""))
+    return contexts
 
 
 def contexts_from_tool_results(

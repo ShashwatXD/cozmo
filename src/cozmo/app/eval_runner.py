@@ -10,7 +10,8 @@ Also runs deterministic groundedness + citation eval cases (no LLM).
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from cozmo.app.agent import AgentRunner
@@ -19,10 +20,10 @@ from cozmo.app.groundedness import (
     score_groundedness,
 )
 from cozmo.domain.memory import ConversationMemory
-from cozmo.domain.messages import Role
 from cozmo.domain.tools import ToolCall
 from cozmo.infra.llm.factory import build_llm
 from cozmo.infra.llm.stub import StubLLMClient
+from cozmo.infra.telemetry.tracer import Tracer
 from cozmo.infra.tools import build_default_registry
 from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolExecutor
@@ -38,6 +39,8 @@ class EvalCase:
     scripted_args: dict | None = None
     final_text: str = "eval ok"
     min_groundedness: int | None = None
+    # A real model words things its own way: with --live, any one of these is enough.
+    expect_any: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,10 @@ class EvalResult:
     passed: bool
     detail: str
     suite: str = "golden"
+    duration_s: float = 0.0
+    tokens: int = 0
+    steps: int = 0
+    turn_id: str | None = None
 
 
 DEFAULT_CASES: list[EvalCase] = [
@@ -67,6 +74,7 @@ DEFAULT_CASES: list[EvalCase] = [
         scripted_args={"path": "math_utils.py"},
         final_text="off-by-one in add() at math_utils.py:3",
         expect_substring="off-by-one",
+        expect_any=("a - b", "subtract", "minus", "off-by-one", "instead of add"),
     ),
     EvalCase(
         id="search_pattern",
@@ -75,6 +83,7 @@ DEFAULT_CASES: list[EvalCase] = [
         scripted_args={"query": "off-by-one"},
         final_text="found off-by-one comment in math_utils.py",
         expect_substring="off-by-one",
+        expect_any=("math_utils.py",),
     ),
 ]
 
@@ -162,21 +171,9 @@ GROUNDEDNESS_CASES: list[GroundednessCase] = [
 
 def _collect_contexts_from_memory(memory: ConversationMemory) -> list[GroundingContext]:
     """Extract grounding contexts from TOOL messages in conversation memory."""
-    from cozmo.app.groundedness import contexts_from_tool_results
+    from cozmo.app.groundedness import contexts_from_messages
 
-    contexts: list[GroundingContext] = []
-    pending_calls: dict[str, tuple[str, str]] = {}
-
-    for msg in memory.snapshot():
-        if msg.role == Role.ASSISTANT and msg.tool_calls:
-            for tc in msg.tool_calls:
-                pending_calls[tc.id] = (tc.name, tc.arguments)
-        elif msg.role == Role.TOOL and msg.tool_call_id:
-            name_args = pending_calls.get(msg.tool_call_id)
-            if name_args:
-                name, args = name_args
-                contexts.extend(contexts_from_tool_results(name, args, msg.content))
-    return contexts
+    return contexts_from_messages(memory.snapshot())
 
 
 def run_golden_eval(
@@ -184,10 +181,12 @@ def run_golden_eval(
     *,
     settings: Settings | None = None,
     live: bool = False,
+    tracer: Tracer | None = None,
 ) -> list[EvalResult]:
     settings = settings or Settings(provider="stub")
     results: list[EvalResult] = []
     for case in DEFAULT_CASES:
+        started = time.monotonic()
         try:
             if live:
                 llm = build_llm(settings)
@@ -210,15 +209,20 @@ def run_golden_eval(
                 ToolExecutor(reg),
                 memory=ConversationMemory(max_messages=20),
                 max_steps=6,
+                tracer=tracer,
+                model_name=settings.model if live else "stub-model",
             )
             out = runner.run(case.prompt)
             detail = (out.final_text or "")[:200]
             ok = True
+            answer = (out.final_text or "").lower()
 
-            if (
-                case.expect_substring
-                and case.expect_substring.lower() not in (out.final_text or "").lower()
-            ):
+            expected = case.expect_any if (live and case.expect_any) else ()
+            if expected:
+                if not any(e.lower() in answer for e in expected):
+                    ok = False
+                    detail = f"none of {list(expected)!r} in {out.final_text!r}"
+            elif case.expect_substring and case.expect_substring.lower() not in answer:
                 ok = False
                 detail = f"missing {case.expect_substring!r} in {out.final_text!r}"
 
@@ -236,9 +240,29 @@ def run_golden_eval(
                     ok = False
                     detail = f"no tool context to score | {detail}"
 
-            results.append(EvalResult(case.id, ok, detail, suite="golden"))
+            results.append(
+                EvalResult(
+                    case.id,
+                    ok,
+                    detail,
+                    suite="golden",
+                    duration_s=round(time.monotonic() - started, 2),
+                    tokens=out.usage.total_tokens,
+                    steps=out.steps,
+                    turn_id=tracer.turn_id if tracer else None,
+                )
+            )
         except Exception as exc:  # noqa: BLE001
-            results.append(EvalResult(case.id, False, str(exc), suite="golden"))
+            results.append(
+                EvalResult(
+                    case.id,
+                    False,
+                    str(exc),
+                    suite="golden",
+                    duration_s=round(time.monotonic() - started, 2),
+                    turn_id=tracer.turn_id if tracer else None,
+                )
+            )
     return results
 
 
@@ -278,9 +302,38 @@ def run_eval(
     settings: Settings | None = None,
     live: bool = False,
     include_groundedness: bool = True,
+    tracer: Tracer | None = None,
 ) -> list[EvalResult]:
     """Run golden agent cases and optional groundedness/citation evals."""
-    results = run_golden_eval(workdir, settings=settings, live=live)
+    results = run_golden_eval(workdir, settings=settings, live=live, tracer=tracer)
     if include_groundedness:
         results.extend(run_groundedness_eval())
     return results
+
+
+def save_eval_run(
+    results: list[EvalResult],
+    out_dir: Path,
+    *,
+    live: bool,
+    provider: str,
+    model: str,
+    session_id: str | None = None,
+) -> Path:
+    """Write one eval run to *out_dir* as JSON, for `cozmo trace` to show and compare."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    started = time.strftime("%Y%m%d-%H%M%S")
+    path = out_dir / f"{started}.json"
+    payload = {
+        "id": started,
+        "created_at": time.time(),
+        "live": live,
+        "provider": provider if live else "stub",
+        "model": model if live else "stub-model",
+        "session_id": session_id,
+        "passed": sum(1 for r in results if r.passed),
+        "total": len(results),
+        "results": [asdict(r) for r in results],
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return path

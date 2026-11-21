@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from cozmo.app.compaction import compact_memory, needs_compaction
 from cozmo.app.context_editing import clear_old_tool_results
+from cozmo.app.groundedness import contexts_from_messages, score_groundedness
 from cozmo.app.history import SessionHistory
 from cozmo.app.model_router import ModelRouter
 from cozmo.app.permissions import PermissionGate
@@ -21,7 +22,7 @@ from cozmo.domain.mode import MUTATING_TOOLS, READ_ONLY_MODES, AgentMode, prompt
 from cozmo.domain.ports import LLMClient
 from cozmo.domain.tools import ToolResult
 from cozmo.infra.mcp.types import is_mcp_tool
-from cozmo.infra.telemetry.tracer import Tracer
+from cozmo.infra.telemetry.tracer import Tracer, clip, snapshot_messages
 from cozmo.infra.tools.registry import ToolExecutor, ToolRegistry
 from cozmo.prompts.loader import load_system_prompt
 
@@ -98,6 +99,7 @@ class AgentRunner:
         self._depth = depth
         self._tool_calls = 0
         self._session_cost = 0.0
+        self._turn_cost = 0.0
         self._turn_started = 0.0
         self.last_result: AgentResult | None = None
         self._stuck_steps: list = []
@@ -134,8 +136,13 @@ class AgentRunner:
 
     def run_events(self, user_text: str) -> Iterator[AgentEvent]:
         self._turn_started = time.monotonic()
+        self._turn_cost = 0.0
         if self._history:
             self._history.user_turn(user_text)
+        if self._tracer:
+            self._tracer.start_turn(
+                user_text, mode=self._mode.value, model=self._model_name, depth=self._depth
+            )
 
         # Cheapest first: old tool results become one-line notes (no model call).
         trimmed, report = clear_old_tool_results(
@@ -163,6 +170,8 @@ class AgentRunner:
             if summary:
                 if self._history:
                     self._history.compact(summary)
+                if self._tracer:
+                    self._tracer.emit("compact", summary=clip(summary, 4_000))
                 yield AgentEvent(kind="compact", text=summary[:200])
 
         messages: list[Message] = [
@@ -201,6 +210,7 @@ class AgentRunner:
                     )
 
             yield AgentEvent(kind="thinking")
+            sent = snapshot_messages(messages) if self._tracer else []
             t0 = time.perf_counter()
             result: CompletionResult = self._llm.complete(
                 messages,
@@ -209,16 +219,8 @@ class AgentRunner:
             )
             latency_ms = (time.perf_counter() - t0) * 1000
             total_usage = total_usage.merged(result.usage)
-            self._accumulate_cost(result.usage)
-            if self._tracer:
-                self._tracer.emit(
-                    "llm",
-                    step=step,
-                    latency_ms=round(latency_ms, 1),
-                    tokens=result.usage.total_tokens,
-                    tool_calls=[tc.name for tc in result.tool_calls],
-                    finish_reason=result.finish_reason,
-                )
+            cost = self._accumulate_cost(result.usage)
+            self._trace_llm(step, sent, tools, result, latency_ms, cost)
 
             stop = self._policy.check_cost(self._session_cost)
             if stop is not None:
@@ -240,12 +242,7 @@ class AgentRunner:
                     steps=step,
                     stop_reason=StopReason.COMPLETED,
                 )
-                if self._tracer:
-                    self._tracer.emit(
-                        "agent_done",
-                        steps=step,
-                        tokens=total_usage.total_tokens,
-                    )
+                self._trace_done(StopReason.COMPLETED, step, total_usage, text, messages)
                 if self._history:
                     self._history.assistant_turn(text, steps=step)
                     self._history.stopped(StopReason.COMPLETED, steps=step)
@@ -283,7 +280,11 @@ class AgentRunner:
                 if self._tracer:
                     self._tracer.emit(
                         "tool",
+                        step=step,
                         name=call.name,
+                        arguments=clip(call.arguments, 4_000),
+                        result=clip(tool_result.content),
+                        result_chars=len(tool_result.content),
                         is_error=tool_result.is_error,
                         latency_ms=round((time.perf_counter() - t1) * 1000, 1),
                     )
@@ -317,9 +318,13 @@ class AgentRunner:
 
         # Max iterations — one last synthesis without tools, then kill reason.
         yield AgentEvent(kind="thinking")
+        sent = snapshot_messages(messages) if self._tracer else []
+        t0 = time.perf_counter()
         result = self._llm.complete(messages, temperature=self._temperature, tools=None)
+        latency_ms = (time.perf_counter() - t0) * 1000
         total_usage = total_usage.merged(result.usage)
-        self._accumulate_cost(result.usage)
+        cost = self._accumulate_cost(result.usage)
+        self._trace_llm(max_steps + 1, sent, None, result, latency_ms, cost)
         text = result.content or "(max steps reached)"
         messages.append(Message(role=Role.ASSISTANT, content=text))
         self._commit_memory(messages)
@@ -329,13 +334,7 @@ class AgentRunner:
             steps=max_steps,
             stop_reason=StopReason.MAX_ITERATIONS,
         )
-        if self._tracer:
-            self._tracer.emit(
-                "agent_done",
-                steps=max_steps,
-                tokens=total_usage.total_tokens,
-                max_steps=True,
-            )
+        self._trace_done(StopReason.MAX_ITERATIONS, max_steps, total_usage, text, messages)
         if self._history:
             self._history.assistant_turn(text, steps=max_steps)
             self._history.stopped(StopReason.MAX_ITERATIONS, steps=max_steps)
@@ -367,10 +366,60 @@ class AgentRunner:
             or self._policy.check_cost(self._session_cost)
         )
 
-    def _accumulate_cost(self, usage: Usage) -> None:
-        cost = estimate_cost_usd(self._model_name, usage)
-        if cost:
-            self._session_cost += cost
+    def _accumulate_cost(self, usage: Usage) -> float:
+        cost = estimate_cost_usd(self._model_name, usage) or 0.0
+        self._session_cost += cost
+        self._turn_cost += cost
+        return cost
+
+    def _trace_llm(self, step, sent, tools, result, latency_ms: float, cost: float) -> None:
+        """One model request with everything sent and received."""
+        if not self._tracer:
+            return
+        self._tracer.emit(
+            "llm",
+            step=step,
+            model=self._model_name,
+            latency_ms=round(latency_ms, 1),
+            prompt_tokens=result.usage.prompt_tokens,
+            completion_tokens=result.usage.completion_tokens,
+            tokens=result.usage.total_tokens,
+            cost_usd=round(cost, 6),
+            finish_reason=result.finish_reason,
+            messages=sent,
+            tools=[t.name for t in tools or []],
+            response=clip(result.content),
+            tool_calls=[
+                {"name": tc.name, "arguments": clip(tc.arguments, 2_000)}
+                for tc in result.tool_calls
+            ],
+        )
+
+    def _trace_done(self, reason, steps: int, usage: Usage, text: str, messages) -> None:
+        """How the turn ended, with a groundedness check of the answer against what was read."""
+        if not self._tracer:
+            return
+        data: dict = {
+            "stop_reason": reason.value,
+            "steps": steps,
+            "tokens": usage.total_tokens,
+            "cost_usd": round(self._turn_cost, 6),
+            "duration_s": round(time.monotonic() - self._turn_started, 2),
+            "answer": clip(text, 4_000),
+        }
+        # Only this turn's tool results count as evidence for this turn's answer.
+        last_user = max((i for i, m in enumerate(messages) if m.role == Role.USER), default=0)
+        contexts = contexts_from_messages(messages[last_user:])
+        if contexts and text:
+            report = score_groundedness(answer=text, contexts=contexts)
+            invalid = report.citations.get("invalid", [])
+            data["groundedness"] = {
+                "score": report.score,
+                "summary": report.summary,
+                "unsupported": [clip(u, 300) for u in report.unsupported[:5]],
+                "invalid_citations": len(invalid) if isinstance(invalid, list) else 0,
+            }
+        self._tracer.emit("agent_done", **data)
 
     def _finish_stopped(
         self,
@@ -393,8 +442,7 @@ class AgentRunner:
         )
         if self._history:
             self._history.stopped(reason, steps=steps)
-        if self._tracer:
-            self._tracer.emit("agent_done", steps=steps, stop_reason=reason.value)
+        self._trace_done(reason, steps, total_usage, text, messages)
         yield AgentEvent(kind="stopped", text=text, stop_reason=reason.value)
         yield AgentEvent(kind="done", text=text)
 
