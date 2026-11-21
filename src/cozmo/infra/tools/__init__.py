@@ -11,11 +11,20 @@ from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolRegistry
 from cozmo.infra.tools.rg_search import search_repo as run_search_repo
 
+# The model asks for more when it needs it, so defaults stay small: a full read of a
+# large file would cost more tokens than the rest of the turn.
+FULL_READ_MAX_CHARS = 12_000
+HEAD_LINES = 150
+DEFAULT_SEMANTIC_TOP_K = 5
+MAX_SEMANTIC_TOP_K = 20
+
+
 READ_SPEC = ToolSpec(
     name="read_file",
     description=(
-        "Read a UTF-8 text file under the workspace. Prefer start_line/end_line "
-        "or around_line after search hits so you do not load entire large files."
+        "Read a UTF-8 text file under the workspace. Small files come back whole. "
+        "Large files return their first lines plus the total line count; ask for "
+        "start_line/end_line or around_line to read the part you need."
     ),
     parameters={
         "type": "object",
@@ -122,7 +131,11 @@ SEMANTIC_SPEC = ToolSpec(
         "type": "object",
         "properties": {
             "query": {"type": "string"},
-            "top_k": {"type": "integer", "default": 10},
+            "top_k": {
+                "type": "integer",
+                "default": DEFAULT_SEMANTIC_TOP_K,
+                "description": "Hits to return (default 5). Ask for more only if these miss.",
+            },
         },
         "required": ["query"],
     },
@@ -183,13 +196,15 @@ def _read_file_ranged(path: Path, args: dict[str, Any], display_path: str) -> st
         if end < start:
             start, end = end, start
     else:
-        # Full file for small sources; hard cap for large ones.
-        max_full_chars = 100_000
-        if len(text) <= max_full_chars:
+        # Small files come back whole. Large ones return the head and their size, so the
+        # model can ask for the exact range instead of paying for the whole file.
+        if len(text) <= FULL_READ_MAX_CHARS:
             return text
+        head = "\n".join(lines[:HEAD_LINES])
         return (
-            text[:max_full_chars] + f"\n...[truncated; file has {total} lines / {len(text)} chars; "
-            "pass start_line/end_line or around_line]"
+            f"{display_path}:1-{min(HEAD_LINES, total)} (of {total})\n{head}\n"
+            f"...[truncated: file has {total} lines / {len(text)} chars; "
+            "pass start_line/end_line or around_line for the part you need]"
         )
 
     start = max(1, min(start, total))
@@ -259,7 +274,8 @@ def build_default_registry(
     def semantic_search(args: dict[str, Any]) -> str:
         if vector_store is None or embedder is None or len(vector_store) == 0:
             return "No RAG index loaded. Run: cozmo index -w <workdir> then retry semantic_search."
-        top_k = int(args.get("top_k") or 10)
+        top_k = _as_int(args.get("top_k")) or DEFAULT_SEMANTIC_TOP_K
+        top_k = max(1, min(top_k, MAX_SEMANTIC_TOP_K))
         from cozmo.search.pipeline import RetrievalPipeline
 
         pipeline = RetrievalPipeline(

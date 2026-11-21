@@ -147,3 +147,28 @@ def test_evidence_pack_fallback_plain_text() -> None:
     )
     assert pack["summary"] == "plain prose finding"
     assert pack["paths"] == []
+
+
+def test_large_file_without_range_returns_head_and_size(tmp_path: Path) -> None:
+    from cozmo.infra.tools import FULL_READ_MAX_CHARS, HEAD_LINES
+
+    body = "\n".join(f"line {i} " + "x" * 60 for i in range(1, 801))
+    assert len(body) > FULL_READ_MAX_CHARS
+    (tmp_path / "big.py").write_text(body, encoding="utf-8")
+    reg = build_default_registry(WorkspaceGuard(tmp_path))
+    out = ToolExecutor(reg, max_chars=100_000).execute(
+        ToolCall(id="1", name="read_file", arguments=json.dumps({"path": "big.py"}))
+    )
+    assert out.content.startswith(f"big.py:1-{HEAD_LINES} (of 800)")
+    assert f"line {HEAD_LINES} " in out.content
+    assert f"line {HEAD_LINES + 1} " not in out.content
+    assert "pass start_line/end_line or around_line" in out.content
+
+
+def test_small_file_without_range_comes_back_whole(tmp_path: Path) -> None:
+    (tmp_path / "small.py").write_text("a = 1\nb = 2\n", encoding="utf-8")
+    reg = build_default_registry(WorkspaceGuard(tmp_path))
+    out = ToolExecutor(reg).execute(
+        ToolCall(id="1", name="read_file", arguments=json.dumps({"path": "small.py"}))
+    )
+    assert out.content == "a = 1\nb = 2\n"
