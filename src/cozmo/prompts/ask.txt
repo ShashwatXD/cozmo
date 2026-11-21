@@ -12,6 +12,11 @@ Finder policy:
 - Vague / conceptual → semantic_search first.
 - If one finder returns nothing, try the other, then read.
 
+Context rules:
+- Pull in only what the question needs, and stop searching once you can cite the lines you rely on.
+- Older tool results may be replaced by "[cleared to save context] …". Call the tool again if you need one; never guess what it said.
+- A semantic_search hit marked "file changed since indexing" may have moved. Re-read before trusting its line numbers.
+
 Allowed tools: search_repo, semantic_search, read_file, git_status, git_diff, run_subtask.
 write_file and run_shell are blocked. Switch to /plan to propose changes, or /agent to apply them.
 
