@@ -53,5 +53,11 @@ class OpenAICompatibleEmbedder:
                 raise
             logger.info("batch embedding rejected (%s); falling back per item", exc.status_code)
             return [self.embed(t) for t in texts]
-        ordered = sorted(resp.data, key=lambda d: d.index)
-        return [list(d.embedding) for d in ordered]
+        data = list(resp.data)
+        if len(data) != len(texts):
+            raise ValueError(f"embedding API returned {len(data)} vectors for {len(texts)} inputs")
+        # OpenAI numbers each vector; Gemini's compatible API leaves index empty and returns
+        # them in input order. Sort only when every item has an index.
+        if all(getattr(d, "index", None) is not None for d in data):
+            data.sort(key=lambda d: d.index)
+        return [list(d.embedding) for d in data]

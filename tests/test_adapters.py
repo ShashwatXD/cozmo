@@ -262,3 +262,20 @@ def test_thinking_tokens_count_as_output() -> None:
     out = client.complete([])
     assert out.usage.completion_tokens == 1_020
     assert sent["reasoning_effort"] == "low"
+
+
+def test_batch_embeddings_without_index_keep_input_order() -> None:
+    """Gemini's OpenAI-compatible API returns index=None; order must still match the inputs."""
+    from types import SimpleNamespace as NS
+
+    from cozmo.infra.rag.openai_embedder import OpenAICompatibleEmbedder
+
+    emb = OpenAICompatibleEmbedder(model="gemini-embedding-001", api_key="k")
+    emb._client = NS(
+        embeddings=NS(
+            create=lambda **kw: NS(
+                data=[NS(index=None, embedding=[float(i)]) for i, _ in enumerate(kw["input"])]
+            )
+        )
+    )
+    assert emb.embed_many(["a", "b", "c"]) == [[0.0], [1.0], [2.0]]
