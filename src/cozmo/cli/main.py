@@ -40,6 +40,7 @@ from cozmo.infra.history.null import NullEventStore
 from cozmo.infra.llm.factory import build_llm
 from cozmo.infra.rag import RepoIndexer
 from cozmo.infra.rag.factory import build_embedder, build_vector_store, resolve_vector_backend
+from cozmo.infra.rag.live_sources import LiveSources
 from cozmo.infra.rag.paths import index_path
 from cozmo.infra.rag.store import JsonVectorStore
 from cozmo.infra.telemetry.tracer import Tracer
@@ -193,22 +194,6 @@ def _ensure_index(root_dir: Path, settings: Settings, *, auto_index: bool) -> No
     _build_indexes(root_dir, settings, quiet=False)
 
 
-def _sources_from_store(root_dir: Path, store: Any) -> dict[str, str]:
-    """Load file text for context expansion from indexed chunk paths."""
-    sources: dict[str, str] = {}
-    for chunk, _emb in store.items():
-        if chunk.path in sources:
-            continue
-        full = root_dir / chunk.path
-        if not full.is_file():
-            continue
-        try:
-            sources[chunk.path] = full.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            pass
-    return sources
-
-
 def _run_agent_session(
     *,
     settings: Settings,
@@ -229,7 +214,11 @@ def _run_agent_session(
     store = build_vector_store(settings, root_dir)
     policy = AgentPolicy.from_settings(settings)
 
-    sources = _sources_from_store(root_dir, store)
+    # Search hits read the current file from disk, not a snapshot taken at startup.
+    index_file = index_path(root_dir)
+    sources = LiveSources(
+        root_dir, indexed_at=index_file.stat().st_mtime if index_file.is_file() else None
+    )
 
     event_store = (
         JsonlEventStore(

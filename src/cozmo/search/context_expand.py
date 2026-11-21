@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Protocol
+
 from cozmo.domain.rag import ExpandedHit, RetrievalCandidate
+
+
+class SourceReader(Protocol):
+    """Anything that returns a file's text by path: a plain dict, or live disk reads."""
+
+    def get(self, path: str, default: str | None = None, /) -> str | None: ...
+
+
+Sources = Mapping[str, str] | SourceReader
 
 
 def expand_hits(
     hits: list[RetrievalCandidate],
-    sources: dict[str, str],
+    sources: Sources,
     *,
     before: int = 12,
     after: int = 12,

@@ -218,7 +218,7 @@ def build_default_registry(
     *,
     vector_store: Any | None = None,
     embedder: Any | None = None,
-    sources: dict[str, str] | None = None,
+    sources: Any | None = None,
     history_rag: Any | None = None,
     shell_timeout_s: float = 60.0,
 ) -> ToolRegistry:
@@ -281,17 +281,23 @@ def build_default_registry(
         pipeline = RetrievalPipeline(
             vector_store,
             embedder,
-            sources=sources or {},
+            sources=sources,
             candidate_k=50,
             top_k=top_k,
         )
         hits = pipeline.retrieve(args["query"], top_k=top_k)
         if not hits:
             return "No semantic hits."
+        stale = getattr(sources, "changed_since_index", None)
         lines: list[str] = []
         for h in hits:
             preview = h.text[:800]
-            lines.append(f"score={h.score:.3f} {h.path}:{h.start_line}-{h.end_line}\n{preview}")
+            note = ""
+            if stale is not None and stale(h.path):
+                note = " [file changed since indexing: line numbers may have moved, re-read it]"
+            lines.append(
+                f"score={h.score:.3f} {h.path}:{h.start_line}-{h.end_line}{note}\n{preview}"
+            )
         return "\n---\n".join(lines)
 
     def search_history(args: dict[str, Any]) -> str:

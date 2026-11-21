@@ -189,7 +189,6 @@ class HistoryRagIndex:
         pipeline = RetrievalPipeline(
             self._store,
             self._embedder,
-            sources={},
             candidate_k=candidate_k,
             top_k=top_k,
             expand_before=0,

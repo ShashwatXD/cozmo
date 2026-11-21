@@ -5,9 +5,11 @@ from __future__ import annotations
 from cozmo.domain.ports_rag import Embedder, Reranker
 from cozmo.domain.rag import ExpandedHit, RetrievalCandidate
 from cozmo.infra.rag.store import VectorStore
-from cozmo.search.context_expand import expand_hits
+from cozmo.search.context_expand import Sources, expand_hits
 from cozmo.search.hybrid_search import HybridSearch
 from cozmo.search.rerank import LexicalReranker
+
+_NO_SOURCES: dict[str, str] = {}
 
 
 class RetrievalPipeline:
@@ -18,7 +20,7 @@ class RetrievalPipeline:
         store: VectorStore,
         embedder: Embedder,
         *,
-        sources: dict[str, str] | None = None,
+        sources: Sources | None = None,
         reranker: Reranker | None = None,
         candidate_k: int = 50,
         top_k: int = 10,
@@ -27,7 +29,7 @@ class RetrievalPipeline:
     ) -> None:
         self._store = store
         self._embedder = embedder
-        self._sources = sources or {}
+        self._sources: Sources = sources if sources is not None else _NO_SOURCES
         self._reranker = reranker or LexicalReranker()
         self._candidate_k = candidate_k
         self._top_k = top_k
