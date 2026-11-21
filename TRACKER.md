@@ -98,6 +98,15 @@ The model pulls in what it needs; the harness keeps defaults small and drops wha
 - [x] Prompts: fetch what the task needs, stop once the answer can cite the lines read, call a tool again instead of guessing a cleared result
 - [ ] Re-embed files edited during a session, instead of only marking their hits
 
+## Observability
+
+- [x] Traces grouped by session and turn: full model requests and replies, tool arguments and results, context changes, stop reason
+- [x] Groundedness score for every answer, from that turn's tool results (no model call)
+- [x] `cozmo eval` runs saved to `.cozmo/evals/` and traced per case; `--live` accepts any of several expected phrasings
+- [x] `cozmo trace` / `/trace`: local dashboard of turns, step timelines and eval runs
+- [x] Gemini provider; thinking tokens counted as output; cut-off answers marked
+- [ ] Larger golden agent set (10–15 live cases: find, explain, "does not exist", multi-file)
+
 ---
 
 ## Phase 4: Amplifiers

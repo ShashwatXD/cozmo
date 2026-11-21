@@ -39,8 +39,9 @@ It is built around three rules:
 | **Modes** | `/ask` explains, `/plan` explores and proposes, `/agent` makes changes. |
 | **Sessions** | Every turn is logged. Resume with `/continue`, export with `/export`, and search past sessions with `search_history`. |
 | **MCP Client** | Connects any Model Context Protocol server. Its tools appear as `mcp__{server}__{tool}`. |
-| **Groundedness Check** | Verifies that every `path:line` an answer cites matches code that was actually read. |
-| **Any Provider** | OpenAI, Anthropic, OpenRouter, Ollama, or any OpenAI-compatible endpoint. Bring your own key. |
+| **Groundedness Check** | Scores every answer: are its claims and `path:line` citations backed by code that was actually read? |
+| **Trace Dashboard** | `cozmo trace` (or `/trace`) opens a local page with every turn, each model call and tool call in full, and saved eval runs. |
+| **Any Provider** | OpenAI, Anthropic, Gemini, OpenRouter, Ollama, or any OpenAI-compatible endpoint. Bring your own key. |
 
 ## How It Works
 
@@ -77,6 +78,24 @@ graph TD
 3. **Re-rank.** The merged order is refined with exact-match, content-word and file-path evidence.
 4. **Read fresh.** Each hit is padded with nearby lines read from the file **as it is now**, so code changed during the session is never shown in its old form. Hits from files changed since indexing are marked so the model re-reads them.
 
+## Tracing and Evals
+
+Every turn is written to `.cozmo/traces.jsonl`: the question, each model request (the messages sent, the reply, the tools it asked for, tokens, cost, time, finish reason), each tool call (arguments and the exact result the model saw), anything the harness did to the context, and how the turn ended. Each answer also gets a **groundedness score**: how many of its claims and `path:line` citations are backed by what was read in that turn. It is computed locally, with no extra model call.
+
+```bash
+cozmo trace          # open the dashboard for this repository (or /trace inside the REPL)
+cozmo eval           # golden tasks + groundedness cases, offline
+cozmo eval --live    # the same tasks against your configured model
+```
+
+The dashboard runs on `localhost` only and reads the files fresh on every refresh. It shows:
+
+- **Turns**: time, model, model calls, tool calls and errors, tokens, cost, groundedness, and how each turn stopped. A reply that hit the output limit is marked **cut off**.
+- **Steps**: open a turn for its timeline, then **Show more details** on any step for the full request, reply or tool result.
+- **Evals**: every `cozmo eval` run is saved to `.cozmo/evals/`, with each case's result, time and tokens, and a link to its trace.
+
+The traces have already caught real problems. With Gemini, an answer stopped mid-sentence with `finish: length` after only 72 visible tokens: thinking had used up the output limit. Cozmo now gives Gemini a larger limit with low reasoning effort, counts thinking tokens as output so cost is right, and marks any cut-off answer instead of reporting it as complete.
+
 ## Benchmarks
 
 Reproduce with `python benchmarks/run_retrieval.py`. The corpus is Cozmo's own source at a pinned commit (97 files, 634 chunks), searched with **43 hand-labeled queries**: 28 questions in plain language and 15 identifier lookups. A query is a hit at *k* if a correct file is in the top *k* files. Embeddings come from local Ollama `nomic-embed-text`.
@@ -108,11 +127,12 @@ Raw results are in [`benchmarks/results/`](benchmarks/results). CI runs the same
 
 - **Language**: Python 3.11+
 - **CLI**: Typer, Rich, questionary
-- **Models**: OpenAI SDK (OpenAI, OpenRouter, Ollama, compatible endpoints), Anthropic Messages API over httpx
+- **Models**: OpenAI SDK (OpenAI, Gemini, OpenRouter, Ollama, compatible endpoints), Anthropic Messages API over httpx
 - **Search**: ripgrep, a custom BM25 index, Chroma, numpy, Reciprocal Rank Fusion
 - **Reliability**: tenacity retries that respect `retry-after`, pydantic-settings
 - **Tools**: Model Context Protocol (`mcp`)
-- **Quality**: pytest (200 tests), ruff, mypy, a coverage gate, GitHub Actions on Python 3.11–3.13
+- **Observability**: JSONL traces, a groundedness scorer, saved eval runs, a local dashboard (standard library only)
+- **Quality**: pytest (205 tests), ruff, mypy, a coverage gate, GitHub Actions on Python 3.11–3.13
 
 ## Project Structure
 
@@ -144,7 +164,7 @@ Dependencies point inward: `cli → app → domain ← infra`. The domain layer 
 ### Prerequisites
 
 - Python 3.11 or newer
-- An API key for OpenAI, Anthropic or OpenRouter, **or** [Ollama](https://ollama.com) running locally
+- An API key for OpenAI, Anthropic, Gemini or OpenRouter, **or** [Ollama](https://ollama.com) running locally
 - Optional: [ripgrep](https://github.com/BurntSushi/ripgrep) for faster exact search (Cozmo falls back to Python without it)
 
 ### 1. Install
@@ -184,6 +204,7 @@ The first run indexes the repository into `.cozmo/`. Later runs only re-embed fi
 | `/sessions` | List recent sessions |
 | `/continue [id]` | Resume a session (the latest if no id) |
 | `/export md\|json` | Export the session |
+| `/trace` | Open the trace and eval dashboard |
 | `/compact` | Summarize older turns now |
 | `/clear` | Start the conversation fresh |
 | `/exit` | Quit |
@@ -192,6 +213,7 @@ Each turn ends with a footer: tokens, estimated cost, `ctx≈N/budget`, steps an
 
 | Command | Description |
 |---|---|
+| `cozmo trace` | Open the trace and eval dashboard |
 | `cozmo index` | Rebuild the code index |
 | `cozmo eval` | Golden tasks and the groundedness check |
 | `cozmo doctor` | Show the settings in effect |
@@ -224,7 +246,8 @@ Highest first: CLI flags → `COZMO_*` env → `.env` → `<repo>/.cozmo/config.
 | `<repo>/.cozmo/chroma/`, `index.json` | Code index |
 | `<repo>/.cozmo/history/*.jsonl` | Session logs |
 | `<repo>/.cozmo/permissions.json` | Saved allow and deny rules |
-| `<repo>/.cozmo/traces.jsonl` | Model and tool traces |
+| `<repo>/.cozmo/traces.jsonl` | Turns, model calls and tool calls |
+| `<repo>/.cozmo/evals/*.json` | Saved eval runs |
 
 </details>
 
@@ -255,7 +278,7 @@ cd cozmo
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,mcp]"
 
-pytest --cov=cozmo                      # 200 tests, offline, coverage gate at 75%
+pytest --cov=cozmo                      # 205 tests, offline, coverage gate at 75%
 ruff check . && ruff format --check .   # lint and format
 mypy                                    # types
 cozmo eval                              # golden tasks
