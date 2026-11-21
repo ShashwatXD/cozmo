@@ -114,7 +114,8 @@ The model pulls in what it needs; the harness keeps defaults small and drops wha
 Ship items that support the thesis. Skip cosmetic work that does not improve context or trust.
 
 - [ ] **M3** Project memory file (`COZMO.md`)
-- [ ] **M5** Structure-aware chunking
+- [ ] **M5** Structure-aware chunking (the symbol index below can supply whole-function chunks)
+- [x] **M5a** Python symbol tools: `find_definition` (whole body + exact range), `find_references` (call sites + enclosing function), `outline` (file table of contents); in-memory index refreshed per changed file, last good parse kept on syntax errors
 - [ ] **M6** Check loop (`run_checks` returning `file:line` diagnostics)
 - [ ] **M7** `@path` and `@path:range` mentions
 - [x] **M8** Session list, continue, and export (tracked primarily under Phase 3; pin/name deferred)

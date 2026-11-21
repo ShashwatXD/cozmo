@@ -121,6 +121,9 @@ class SubAgentService:
                 "search_repo",
                 "semantic_search",
                 "search_history",
+                "find_definition",
+                "find_references",
+                "outline",
                 "git_status",
                 "git_diff",
             }

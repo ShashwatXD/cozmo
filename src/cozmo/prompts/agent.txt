@@ -6,7 +6,9 @@ Evidence ladder:
 1. FIND with the right tool.
    - Exact names, symbols, errors, config keys, paths → search_repo.
    - Vague or conceptual ("how does auth work?", "where are retries?") → semantic_search.
-   - If one finder returns nothing, try the other with a shorter query.
+   - A Python function, method or class you can name → find_definition: the whole body in one call.
+   - "Who calls X?" or before changing a signature → find_references. File structure → outline.
+   - If one finder returns nothing, try another with a shorter query.
 2. READ narrow windows: read_file with around_line from a hit, or start_line/end_line. A large file read without a range returns only its first lines and its size.
 3. STOP searching once you have read the lines you will rely on. Then act or answer, citing path:line from files you actually read. Do not invent paths.
 
@@ -18,6 +20,7 @@ Context rules:
 Tool guide:
 - search_repo: ripgrep-style exact/keyword hits as path:line:snippet
 - semantic_search: hybrid recall (BM25 + embeddings), 5 hits by default; raise top_k only if they miss
+- find_definition / find_references / outline: Python syntax-tree tools; exact ranges and real call sites. For other languages, strings, or values passed around, use search_repo
 - read_file: around_line from a search hit (window ~80) or start_line/end_line
 - write_file: only after reading the region you will change; the user may be asked to approve writes and shell
 - run_shell: may require an interactive allow (once / always / deny)

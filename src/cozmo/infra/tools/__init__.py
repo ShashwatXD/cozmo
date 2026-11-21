@@ -10,6 +10,13 @@ from cozmo.domain.tools import ToolSpec
 from cozmo.infra.tools.permissions import WorkspaceGuard
 from cozmo.infra.tools.registry import ToolRegistry
 from cozmo.infra.tools.rg_search import search_repo as run_search_repo
+from cozmo.infra.tools.symbols import (
+    MAX_REFERENCES,
+    SymbolIndex,
+    format_definitions,
+    format_outline,
+    format_references,
+)
 
 # The model asks for more when it needs it, so defaults stay small: a full read of a
 # large file would cost more tokens than the rest of the turn.
@@ -120,6 +127,53 @@ GIT_DIFF_SPEC = ToolSpec(
     },
 )
 
+FIND_DEFINITION_SPEC = ToolSpec(
+    name="find_definition",
+    description=(
+        "Python only. The full source of a function, method or class by name, with its exact "
+        "line range (path:start-end), in one call. Use 'Class.method' when the name is common. "
+        "Faster than search_repo + read_file when you know the name."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "e.g. detect_stuck or AgentRunner.run"},
+            "path": {"type": "string", "description": "Optional: only this file"},
+        },
+        "required": ["name"],
+    },
+)
+
+FIND_REFERENCES_SPEC = ToolSpec(
+    name="find_references",
+    description=(
+        "Python only. Every call to a function or method, as path:line plus the function the "
+        "call sits in. Use before changing a signature or to see who depends on something. "
+        "Only calls are found: for values passed around or names in strings, use search_repo."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "max_hits": {"type": "integer", "default": MAX_REFERENCES},
+        },
+        "required": ["name"],
+    },
+)
+
+OUTLINE_SPEC = ToolSpec(
+    name="outline",
+    description=(
+        "Python only. The classes, functions and methods in one file with their signatures and "
+        "line ranges: a table of contents, much cheaper than reading the file."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {"path": {"type": "string", "description": "Relative path to a .py file"}},
+        "required": ["path"],
+    },
+)
+
 SEMANTIC_SPEC = ToolSpec(
     name="semantic_search",
     description=(
@@ -222,8 +276,10 @@ def build_default_registry(
     history_rag: Any | None = None,
     shell_timeout_s: float = 60.0,
 ) -> ToolRegistry:
-    """Register default workspace tools (read, write, search, git, optional RAG)."""
+    """Register default workspace tools (read, write, search, symbols, git, optional RAG)."""
     reg = ToolRegistry()
+    # Built on first use and refreshed per query; nothing is stored on disk.
+    symbols = SymbolIndex(guard.workdir)
 
     def read_file(args: dict[str, Any]) -> str:
         rel = args["path"]
@@ -309,7 +365,24 @@ def build_default_registry(
         top_k = int(args.get("top_k") or 5)
         return history_rag.search(str(args.get("query") or ""), top_k=top_k)
 
+    def find_definition(args: dict[str, Any]) -> str:
+        path = str(args.get("path") or "") or None
+        if path:
+            guard.resolve(path)
+        return format_definitions(symbols, str(args["name"]), path=path)
+
+    def find_references(args: dict[str, Any]) -> str:
+        max_hits = _as_int(args.get("max_hits")) or MAX_REFERENCES
+        return format_references(symbols, str(args["name"]), max_hits=max(1, min(max_hits, 300)))
+
+    def outline(args: dict[str, Any]) -> str:
+        guard.resolve(args["path"])
+        return format_outline(symbols, str(args["path"]))
+
     reg.register(READ_SPEC, read_file)
+    reg.register(FIND_DEFINITION_SPEC, find_definition)
+    reg.register(FIND_REFERENCES_SPEC, find_references)
+    reg.register(OUTLINE_SPEC, outline)
     reg.register(WRITE_SPEC, write_file)
     reg.register(SEARCH_SPEC, search_repo)
     reg.register(SEMANTIC_SPEC, semantic_search)

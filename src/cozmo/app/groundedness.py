@@ -323,6 +323,30 @@ def contexts_from_tool_results(
             )
         ]
 
+    if tool_name in {"find_definition", "outline", "find_references"}:
+        # Blocks start with "path.py:start-end ..." (definitions), lines are "path.py:line ..."
+        # (references), and an outline starts with "path.py (N lines)".
+        found: list[GroundingContext] = []
+        current: list[str] = []
+        head: tuple[str, int, int] | None = None
+        for line in content.splitlines():
+            m = re.match(r"^([\w./-]+\.py):(\d+)(?:-(\d+))?\s", line)
+            if m:
+                if head and current:
+                    found.append(GroundingContext(head[0], head[1], head[2], "\n".join(current)))
+                start = int(m.group(2))
+                head, current = (m.group(1), start, int(m.group(3) or start)), [line]
+            elif head:
+                current.append(line)
+        if head and current:
+            found.append(GroundingContext(head[0], head[1], head[2], "\n".join(current)))
+        if tool_name == "outline" and not found:
+            m = re.match(r"^([\w./-]+\.py) \((\d+) lines\)", content)
+            if m:
+                found.append(GroundingContext(m.group(1), 1, int(m.group(2)), content[:8000]))
+        if found:
+            return found
+
     if tool_name in {"search_repo", "semantic_search"}:
         chunks: list[GroundingContext] = []
         for line in content.splitlines()[:40]:

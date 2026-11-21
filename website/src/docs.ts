@@ -206,7 +206,7 @@ function build(root: HTMLElement): void {
       blurb: "Orchestrator + worker",
       body: para(
         "Roles, not a single chat model. The worker runs the ReAct tool loop. The orchestrator handles compaction and heavier synthesis when you route a stronger model there.",
-        "Set model for the orchestrator and an optional cheaper worker_model for tool calls. Same provider or mixed. BYOK across OpenAI, Anthropic, OpenRouter, and Ollama.",
+        "Set model for the orchestrator and an optional cheaper worker_model for tool calls. Same provider or mixed. BYOK across OpenAI, Anthropic, Gemini, OpenRouter, and Ollama.",
       ),
     },
     {
@@ -214,7 +214,8 @@ function build(root: HTMLElement): void {
       title: "Hybrid retrieval",
       blurb: "Exact find + meaning",
       body: para(
-        "Exact find via ripgrep-backed search. Meaning via BM25 + embeddings, lexical rerank, then narrow file reads. Citations stay grounded in path:line.",
+        "Three ways to find code. Exact text via ripgrep. Meaning via BM25 + embeddings, merged and re-ranked. Structure via Python syntax trees: find_definition returns a whole function with its exact line range in one call, find_references lists real call sites with the function they sit in, and outline gives a file's table of contents.",
+        "Search hits are padded with lines read from the file as it is now. Citations stay grounded in path:line, and every answer gets a groundedness score.",
       ),
     },
     {
@@ -230,7 +231,8 @@ function build(root: HTMLElement): void {
       title: "Context economy",
       blurb: "Budgets you can see",
       body: para(
-        "Soft compaction, hard budgets on steps, tools, cost, and time. Live ctx≈N/budget meter so sessions stay observable, not opaque.",
+        "The model fetches context when it needs it. Small defaults (5 search hits, large files return their first lines and size), and before each turn old tool results become one-line notes the model can fetch again. Summaries only run if that is not enough.",
+        "Hard budgets on steps, tools, cost, and time. Every turn is traced; cozmo trace opens a local dashboard of model calls, tool calls and eval runs.",
       ),
     },
     {

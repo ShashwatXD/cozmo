@@ -31,6 +31,7 @@ It is built around three rules:
 |---|---|
 | **Own Agent Loop** | Model → tool calls → results → repeat, in plain Python, with a clear stop reason on every run. |
 | **Hybrid Code Search** | Keyword search (BM25) and embeddings, merged and re-ranked. Benchmarked below. |
+| **Code Structure Tools** | Python syntax trees: `find_definition` returns a whole function with its exact line range in one call, `find_references` lists real call sites with their caller, `outline` gives a file's table of contents. |
 | **Context on Demand** | Small defaults, fresh file reads for every search hit, and old tool results cleared before anything is summarized. |
 | **Permission Gate** | A diff before every write and the full command before every shell call: allow once, always allow, or deny. Saved per project. |
 | **Guardrails** | Hard stops on steps, tool calls, cost in USD and session time. A stuck detector catches repeated calls and repeated errors. |
@@ -66,12 +67,24 @@ graph TD
 
 1. **Clear.** Before each turn, tool results older than the newest six become a note like `[cleared to save context] read_file(path="app.py", start_line=40) returned 6,120 chars here earlier. Call it again if you still need the result.` No model call is needed.
 2. **Summarize, only if needed.** If the conversation is still over 70% of its token budget, the planning model summarizes older turns.
-3. **Decide.** The model picks the next tool: `search_repo` for exact names, `semantic_search` for ideas, `read_file` for a window of lines.
+3. **Decide.** The model picks the next tool: `search_repo` for exact text, `semantic_search` for ideas, `find_definition` / `find_references` / `outline` for Python structure, `read_file` for a window of lines.
 4. **Check.** Every step checks the limits. Writes and shell commands wait for your answer.
 5. **Run and cap.** The tool runs inside the project folder only, and its output is cut to a size cap.
 6. **Answer.** When the model needs no more tools, it answers and cites the lines it read.
 
-### How search finds code
+### Three ways to find code
+
+| Question | Tool | What comes back |
+|---|---|---|
+| "Every place this exact text appears" (names, errors, strings, regex) | `search_repo` | One line per hit, `path:line:snippet`, complete and exact |
+| "Where is the logic that does X?" (no name known) | `semantic_search` | The 5 best chunks, each padded with nearby lines |
+| "Show me `detect_stuck`" | `find_definition` | The whole function with its exact range, `path:62-128`, in one call |
+| "Who calls `add`?" | `find_references` | Real calls only, each with the function it sits in |
+| "What is in this file?" | `outline` | Classes, functions and signatures with line ranges |
+
+The structure tools parse Python files into syntax trees. The index lives in memory, is built on first use (under a second for Cozmo's own source, with no API calls) and re-parses only files that changed, so it is never stale. A file with a syntax error keeps its last good parse. They cannot see links made at runtime: two methods with the same name on different types (`runner.run` and `subprocess.run`) are both reported, with a note, and functions passed as values or registered by a string name need `search_repo`. Other languages use search and reads.
+
+### How semantic search finds code
 
 1. **Index.** Files are split into chunks of about 600 characters and embedded once. Later runs re-embed only files whose content changed.
 2. **Recall.** A query runs through keyword search (identifiers are split, so `detect_stuck` also matches "stuck") and vector search, and the two lists are merged with Reciprocal Rank Fusion.
@@ -128,11 +141,11 @@ Raw results are in [`benchmarks/results/`](benchmarks/results). CI runs the same
 - **Language**: Python 3.11+
 - **CLI**: Typer, Rich, questionary
 - **Models**: OpenAI SDK (OpenAI, Gemini, OpenRouter, Ollama, compatible endpoints), Anthropic Messages API over httpx
-- **Search**: ripgrep, a custom BM25 index, Chroma, numpy, Reciprocal Rank Fusion
+- **Search**: ripgrep, Python `ast` symbol index, a custom BM25 index, Chroma, numpy, Reciprocal Rank Fusion
 - **Reliability**: tenacity retries that respect `retry-after`, pydantic-settings
 - **Tools**: Model Context Protocol (`mcp`)
 - **Observability**: JSONL traces, a groundedness scorer, saved eval runs, a local dashboard (standard library only)
-- **Quality**: pytest (205 tests), ruff, mypy, a coverage gate, GitHub Actions on Python 3.11–3.13
+- **Quality**: pytest (212 tests), ruff, mypy, a coverage gate, GitHub Actions on Python 3.11–3.13
 
 ## Project Structure
 
@@ -146,7 +159,7 @@ cozmo/
 │   ├── infra/
 │   │   ├── llm/       # OpenAI-compatible and Anthropic clients, retries, model catalog
 │   │   ├── rag/       # chunking, incremental indexer, vector stores, live file reads
-│   │   ├── tools/     # tool registry, workspace sandbox, ripgrep, permission store
+│   │   ├── tools/     # tool registry, workspace sandbox, ripgrep, Python symbol index, permissions
 │   │   ├── history/   # session logs and history search
 │   │   ├── mcp/       # MCP client and tool registration
 │   │   └── telemetry/ # traces
@@ -278,7 +291,7 @@ cd cozmo
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,mcp]"
 
-pytest --cov=cozmo                      # 205 tests, offline, coverage gate at 75%
+pytest --cov=cozmo                      # 212 tests, offline, coverage gate at 75%
 ruff check . && ruff format --check .   # lint and format
 mypy                                    # types
 cozmo eval                              # golden tasks
