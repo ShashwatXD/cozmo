@@ -85,6 +85,21 @@ Prerequisite for a strong context and retrieval layer.
 
 ---
 
+## Context on demand
+
+The model pulls in what it needs; the harness keeps defaults small and drops what is old.
+
+- [x] `read_file` without a range returns the first 150 lines and the file size for files over 12k chars (was up to 100k chars)
+- [x] `semantic_search` returns 5 hits by default (was 10); the model raises `top_k` only when they miss
+- [x] Search hits are expanded from the file on disk at query time, not from a startup snapshot of every file
+- [x] Hits from files changed after indexing are marked so the model re-reads them
+- [x] Before each turn, tool results older than the newest `keep_tool_results` (default 6) become a one-line note naming the call; no model call needed
+- [x] Summarizing older turns runs only if the context is still over 70% of budget after clearing
+- [x] Prompts: fetch what the task needs, stop once the answer can cite the lines read, call a tool again instead of guessing a cleared result
+- [ ] Re-embed files edited during a session, instead of only marking their hits
+
+---
+
 ## Phase 4: Amplifiers
 
 Ship items that support the thesis. Skip cosmetic work that does not improve context or trust.
@@ -108,7 +123,7 @@ Differentiation after Phase 1 is solid. Not a peer parity list.
 - [ ] **Evidence graph**: session graph linking file, claim, and open question; subsequent tools prefer expanding that graph
 - [ ] **Confidence-gated answers**: weak citations trigger further investigation or an explicit refusal to invent — **partial:** `score_groundedness()` in eval; not in agent loop
 - [ ] **Dual-index fusion**: ripgrep and semantic hits as one ranked evidence stream, enforced by the harness
-- [ ] **Context compiler**: before each LLM call, pin the goal and citations; compress prior tool output to fingerprints (example: `agent.py:40-90`)
+- [ ] **Context compiler**: before each LLM call, pin the goal and citations; compress prior tool output to fingerprints (example: `agent.py:40-90`) — **partial:** old tool results become one-line notes naming the call (see Context on demand); goal pinning not done
 - [ ] **Eval gate**: golden find and read tasks; harness regressions fail CI — **partial:** golden + groundedness/citation suites in `cozmo eval`
 
 **Exit criteria:** Model input is compiled evidence under harness control, with evals that detect retrieval and context regressions.

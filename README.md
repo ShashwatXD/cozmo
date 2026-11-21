@@ -1,6 +1,6 @@
 # Cozmo: A Coding Agent for Your Terminal
 
-Cozmo is a coding agent that runs in your terminal, inside your own repository. It finds the right code with hybrid search, reads only the lines it needs, asks before it writes a file or runs a command, and stops itself before it burns through your budget. The agent loop is written from scratch. There is no LangChain.
+Cozmo is a coding agent that runs in your terminal, inside your own repository. It starts with almost nothing in its context and lets the model pull in only what the task needs: it searches first, reads the lines that matter, asks before it changes anything, and stops itself before it runs past its budget. The agent loop is plain Python. There is no LangChain.
 
 [![CI](https://github.com/ShashwatXD/cozmo/actions/workflows/ci.yml/badge.svg)](https://github.com/ShashwatXD/cozmo/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/cozmo-agent.svg)](https://pypi.org/project/cozmo-agent/)
@@ -17,124 +17,124 @@ cozmo
 
 ## Overview
 
-Most coding agents either hide the loop behind a framework or paste whole files into the prompt until the context window fills up. Cozmo takes the opposite approach. **You own the loop**, and the harness decides how many bytes go back into the model.
+Many coding agents paste whole files into the prompt and keep them there until the context window fills up. Cozmo does the opposite: **the model fetches context when it needs it, and the harness decides how much of it stays.**
 
 It is built around three rules:
 
-1. **Find before you read.** Exact names go through ripgrep. Vague questions go through hybrid semantic search. Files are read in line ranges, not whole.
-2. **Nothing mutating runs without consent.** Writes and shell commands show a preview first, and you choose *allow once*, *always allow* or *deny*.
-3. **Every run has hard limits.** Steps, tool calls, dollars and wall-clock time are all capped, and a stuck detector breaks repeating tool loops.
+1. **Find, then read a window.** Exact names go through ripgrep, vague questions through hybrid search, and files are read in line ranges. Large files without a range return only their first lines and their size.
+2. **Old results make room for new ones.** Before each turn, older tool results become a one-line note. If the model needs one again, it calls the tool again and gets the current version.
+3. **Nothing risky without consent, nothing unbounded.** Writes and shell commands show a preview first. Steps, tool calls, cost and time all have hard limits.
 
 ## Core Features
 
 | Feature | Description |
 |---|---|
-| **Owned ReAct Loop** | A plain Python agent loop: model → tool calls → observations → repeat, with a typed stop reason on every run. |
-| **Hybrid Code Search** | BM25 and embeddings fused with Reciprocal Rank Fusion, then a lexical reranker. Benchmarked below. |
-| **Multi-Model Routing** | A strong *orchestrator* model for planning and summaries, and an optional cheaper *worker* model for tool calls. |
-| **Subagents and Teams** | `run_subtask` sends out a read-only child agent that returns a compact evidence pack. `run_team` runs a director → researcher/coder/reviewer → synthesizer pipeline. |
-| **Permission Gate** | Diff preview before writes, the full command before shell. Rules are saved per project in `.cozmo/permissions.json`. |
-| **Guardrails** | Hard stops on steps, tool calls, cost (USD) and session time. Context is compacted automatically at about 70% of budget. |
-| **Stuck Detector** | Spots repeated identical calls, repeated identical errors and A/B ping-pong, then pushes the model to change course. |
-| **Modes** | `/ask` (read-only explain), `/plan` (explore, then propose) and `/agent` (full tools). |
-| **Sessions** | Every turn is logged as JSONL. `/continue` resumes a session, `/export md\|json` writes an audit trail, and `search_history` searches past turns. |
-| **MCP Client** | Connects any Model Context Protocol server over stdio. Its tools appear as `mcp__{server}__{tool}`. |
-| **Groundedness Eval** | Checks every claim and `path:line` citation in an answer against the code that was actually retrieved. |
-| **Any Provider** | OpenAI, Anthropic, OpenRouter, Ollama, or any OpenAI-compatible `base_url`. Bring your own key. |
+| **Own Agent Loop** | Model → tool calls → results → repeat, in plain Python, with a clear stop reason on every run. |
+| **Hybrid Code Search** | Keyword search (BM25) and embeddings, merged and re-ranked. Benchmarked below. |
+| **Context on Demand** | Small defaults, fresh file reads for every search hit, and old tool results cleared before anything is summarized. |
+| **Permission Gate** | A diff before every write and the full command before every shell call: allow once, always allow, or deny. Saved per project. |
+| **Guardrails** | Hard stops on steps, tool calls, cost in USD and session time. A stuck detector catches repeated calls and repeated errors. |
+| **Subagents and Teams** | `run_subtask` sends a read-only helper that returns a short evidence pack. `run_team` splits large tasks across director, researcher, coder and reviewer roles. |
+| **Two Models** | A strong model for planning and summaries, and an optional cheaper model for tool calls. |
+| **Modes** | `/ask` explains, `/plan` explores and proposes, `/agent` makes changes. |
+| **Sessions** | Every turn is logged. Resume with `/continue`, export with `/export`, and search past sessions with `search_history`. |
+| **MCP Client** | Connects any Model Context Protocol server. Its tools appear as `mcp__{server}__{tool}`. |
+| **Groundedness Check** | Verifies that every `path:line` an answer cites matches code that was actually read. |
+| **Any Provider** | OpenAI, Anthropic, OpenRouter, Ollama, or any OpenAI-compatible endpoint. Bring your own key. |
 
 ## How It Works
 
 ```mermaid
 graph TD
-    A[You: question or task] --> B{Over context budget?};
-    B -- Yes --> C[Orchestrator compacts older turns];
-    C --> D;
-    B -- No --> D[Worker model plans the next step];
-    D --> E{Hard limit hit? steps / tools / $ / time};
-    E -- Yes --> Z[Stop with a typed reason];
-    E -- No --> F{Tool calls?};
-    F -- No --> Y[Final answer + citations];
-    F -- Yes --> G{Mutating tool?};
-    G -- Yes --> H[Preview → allow / always / deny];
-    H --> I;
-    G -- No --> I[Run tool inside the workspace sandbox];
-    I --> J[Trim output to the size cap];
-    J --> K{Stuck pattern?};
-    K -- Yes --> L[Inject a one-time course-correction hint];
-    L --> D;
-    K -- No --> D;
+    A[You: a question or a task] --> B[Clear old tool results];
+    B --> C{Still over 70% of the budget?};
+    C -- Yes --> D[Summarize older turns];
+    C -- No --> E;
+    D --> E[Model decides the next step];
+    E --> F{Hit a limit? steps, tools, cost, time};
+    F -- Yes --> Z[Stop with a reason];
+    F -- No --> G{Wants a tool?};
+    G -- No --> Y[Answer with path:line citations];
+    G -- Yes --> H{Writes a file or runs a command?};
+    H -- Yes --> I[Show a preview, ask you];
+    I --> J;
+    H -- No --> J[Run the tool inside the project folder];
+    J --> K[Cap the result size];
+    K --> E;
 ```
 
-**Retrieval** (the `semantic_search` tool):
+1. **Clear.** Before each turn, tool results older than the newest six become a note like `[cleared to save context] read_file(path="app.py", start_line=40) returned 6,120 chars here earlier. Call it again if you still need the result.` No model call is needed.
+2. **Summarize, only if needed.** If the conversation is still over 70% of its token budget, the planning model summarizes older turns.
+3. **Decide.** The model picks the next tool: `search_repo` for exact names, `semantic_search` for ideas, `read_file` for a window of lines.
+4. **Check.** Every step checks the limits. Writes and shell commands wait for your answer.
+5. **Run and cap.** The tool runs inside the project folder only, and its output is cut to a size cap.
+6. **Answer.** When the model needs no more tools, it answers and cites the lines it read.
 
-1. **Index.** Files are split into overlapping chunks of about 600 characters on line boundaries, embedded in batches that span files, and stored in Chroma. Only files whose content hash changed are re-embedded.
-2. **Recall.** A query runs through BM25 (inverted index with identifier sub-word splitting, so `detect_stuck` also matches "stuck") and cosine vector search. The two lists are fused with Reciprocal Rank Fusion.
-3. **Rerank.** The fused rank is kept as the main signal. It is refined with exact-match, content-word and path evidence.
-4. **Expand.** Each hit is padded with surrounding source lines and returned as `path:start-end`.
+### How search finds code
+
+1. **Index.** Files are split into chunks of about 600 characters and embedded once. Later runs re-embed only files whose content changed.
+2. **Recall.** A query runs through keyword search (identifiers are split, so `detect_stuck` also matches "stuck") and vector search, and the two lists are merged with Reciprocal Rank Fusion.
+3. **Re-rank.** The merged order is refined with exact-match, content-word and file-path evidence.
+4. **Read fresh.** Each hit is padded with nearby lines read from the file **as it is now**, so code changed during the session is never shown in its old form. Hits from files changed since indexing are marked so the model re-reads them.
 
 ## Benchmarks
 
-All numbers below are reproducible with `python benchmarks/run_retrieval.py`. The corpus is Cozmo's own source at a pinned commit (97 files, 634 chunks), searched with **43 hand-labeled queries**: 28 natural-language questions and 15 identifier lookups. A query counts as a hit at *k* if a correct file appears in the top *k* distinct files. Embeddings come from local Ollama `nomic-embed-text`.
+Reproduce with `python benchmarks/run_retrieval.py`. The corpus is Cozmo's own source at a pinned commit (97 files, 634 chunks), searched with **43 hand-labeled queries**: 28 questions in plain language and 15 identifier lookups. A query is a hit at *k* if a correct file is in the top *k* files. Embeddings come from local Ollama `nomic-embed-text`.
 
-**Production pipeline (`semantic_search`), before and after the engineering pass:**
-
-| Metric | Before | After |
+| Metric | Before tuning | After tuning |
 |---|---|---|
 | Recall@1 | 0.56 | **0.79** |
 | Recall@5 | 0.93 | **0.98** |
 | MRR@10 | 0.708 | **0.868** |
 | `semantic_search` latency, p50 | 64.4 ms | **2.5 ms** |
 | Embedding requests to index the corpus | 99 | **10** |
-| Full index time (local Ollama, uncached) | 25.6 s | **21.6 s** |
-
-**By strategy (after):**
 
 | Strategy | R@1 | R@5 | MRR@10 | p50 |
 |---|---|---|---|---|
-| BM25 only | 0.44 | 0.98 | 0.664 | 0.16 ms |
-| Vector only | 0.72 | 0.93 | 0.811 | 0.07 ms |
-| Hybrid (RRF) | 0.74 | 0.93 | 0.834 | 0.53 ms |
-| **Hybrid + rerank** | **0.79** | **0.98** | **0.868** | 2.5 ms |
+| Keywords only (BM25) | 0.44 | 0.98 | 0.664 | 0.16 ms |
+| Vectors only | 0.72 | 0.93 | 0.811 | 0.07 ms |
+| Both, merged (RRF) | 0.74 | 0.93 | 0.834 | 0.53 ms |
+| **Both + re-rank** | **0.79** | **0.98** | **0.868** | 2.5 ms |
 
-What changed:
+What made the difference:
 
-- **Reranker.** The old reranker multiplied the fused score by 0.15. RRF scores are around 0.03, so the hybrid ranking was effectively thrown away and the final order was purely lexical. The pipeline scored *below* plain hybrid search. The rerank now keeps the fused rank as its prior.
-- **Latency.** BM25 used to be rebuilt over the whole repository on every tool call. It is now an inverted index cached per store version. Vector search was a pure-Python loop and is now a single numpy matrix-vector product.
-- **Indexing.** Embedding requests are batched across files instead of one or more per file. A failing file is retried on its own so it cannot break the rest.
+- **Re-ranker.** The old re-ranker scaled the merged score by 0.15, which threw the merged order away. It now keeps that order as its starting point.
+- **Speed.** Keyword search used to rebuild its index on every call; it is now cached. Vector search went from a Python loop to one numpy operation.
+- **Indexing.** Embedding requests are batched across files, and a failing file is retried on its own.
 
-Raw reports are in [`benchmarks/results/`](benchmarks/results). CI runs the same benchmark offline (with a deterministic stub embedder) as a quality gate, so ranking regressions fail the build.
+Raw results are in [`benchmarks/results/`](benchmarks/results). CI runs the same benchmark offline with a deterministic embedder, so a ranking regression fails the build.
 
 ## Tech Stack
 
 - **Language**: Python 3.11+
 - **CLI**: Typer, Rich, questionary
-- **LLMs**: OpenAI SDK (OpenAI / OpenRouter / Ollama / compatible), Anthropic Messages API over httpx
-- **Retrieval**: Chroma (HNSW), numpy, a custom BM25 inverted index, Reciprocal Rank Fusion
-- **Reliability**: tenacity retries with `retry-after` support, pydantic-settings
-- **Tooling**: ripgrep, Model Context Protocol (`mcp`)
-- **Quality**: pytest (188 tests), ruff, mypy, a coverage gate, and GitHub Actions on Python 3.11–3.13
+- **Models**: OpenAI SDK (OpenAI, OpenRouter, Ollama, compatible endpoints), Anthropic Messages API over httpx
+- **Search**: ripgrep, a custom BM25 index, Chroma, numpy, Reciprocal Rank Fusion
+- **Reliability**: tenacity retries that respect `retry-after`, pydantic-settings
+- **Tools**: Model Context Protocol (`mcp`)
+- **Quality**: pytest (200 tests), ruff, mypy, a coverage gate, GitHub Actions on Python 3.11–3.13
 
 ## Project Structure
 
 ```
 cozmo/
 ├── src/cozmo/
-│   ├── domain/              # pure rules and types: messages, guardrails, events, ports
-│   ├── app/                 # use-cases: agent loop, compaction, subagents, teams,
-│   │                        #   permissions, stuck detector, groundedness, evals
-│   ├── search/              # hybrid BM25 + vector search, rerank, context expansion
+│   ├── domain/        # plain rules and types: messages, guardrails, events
+│   ├── app/           # agent loop, context clearing, summaries, subagents, teams,
+│   │                  #   permissions, stuck detector, groundedness, evals
+│   ├── search/        # hybrid search, re-rank, line expansion
 │   ├── infra/
-│   │   ├── llm/             # OpenAI-compatible + Anthropic adapters, retries, model catalog
-│   │   ├── rag/             # chunking, incremental indexer, Chroma / JSON vector stores
-│   │   ├── tools/           # tool registry, sandbox, ripgrep search, permission store
-│   │   ├── history/         # JSONL session store + history search
-│   │   ├── mcp/             # MCP client manager and tool registration
-│   │   └── telemetry/       # structured traces
-│   ├── cli/                 # Typer entrypoint, REPL, setup wizard
-│   └── prompts/             # versioned system prompts per mode and role
-├── benchmarks/              # labeled retrieval queries, runner, saved results
-├── tests/                   # unit, integration (real MCP server) and CLI tests
-└── website/                 # project site
+│   │   ├── llm/       # OpenAI-compatible and Anthropic clients, retries, model catalog
+│   │   ├── rag/       # chunking, incremental indexer, vector stores, live file reads
+│   │   ├── tools/     # tool registry, workspace sandbox, ripgrep, permission store
+│   │   ├── history/   # session logs and history search
+│   │   ├── mcp/       # MCP client and tool registration
+│   │   └── telemetry/ # traces
+│   ├── cli/           # Typer entry point, REPL, setup wizard
+│   └── prompts/       # system prompts per mode and role
+├── benchmarks/        # labeled queries, runner, saved results
+├── tests/             # unit, integration (a real MCP server) and CLI tests
+└── website/           # project site
 ```
 
 Dependencies point inward: `cli → app → domain ← infra`. The domain layer never imports a provider SDK.
@@ -151,11 +151,10 @@ Dependencies point inward: `cli → app → domain ← infra`. The domain layer 
 
 ```bash
 pipx install cozmo-agent              # recommended
-# or: pip install cozmo-agent
-pip install "cozmo-agent[mcp]"        # optional: MCP tool servers
+pip install "cozmo-agent[mcp]"        # with MCP support
 ```
 
-The package on PyPI is `cozmo-agent`. The command is `cozmo`.
+The package is `cozmo-agent`. The command is `cozmo`.
 
 ### 2. Configure
 
@@ -163,52 +162,45 @@ The package on PyPI is `cozmo-agent`. The command is `cozmo`.
 cozmo setup
 ```
 
-Pick a provider, paste your key and choose a model. Settings go to `~/.cozmo/config.json`, which is readable only by you. You can also set `COZMO_PROVIDER`, `COZMO_MODEL` and `COZMO_API_KEY` as environment variables.
+Pick a provider, paste your key and choose a model. Settings go to `~/.cozmo/config.json`, readable only by you. `COZMO_PROVIDER`, `COZMO_MODEL` and `COZMO_API_KEY` also work as environment variables.
 
 ### 3. Run
 
 ```bash
 cd ~/your-project
-cozmo                       # interactive agent
-cozmo -m "why does add() return the wrong value?"   # one shot
-cozmo --ask                 # read-only explain mode
-cozmo --plan                # explore, then propose
+cozmo                                                  # interactive agent
+cozmo -m "why does add() return the wrong value?"      # one question
+cozmo --ask                                            # explain only
+cozmo --plan                                           # explore, then propose
 ```
 
-The first launch indexes the repository into `.cozmo/`. Later launches only re-embed files that changed.
+The first run indexes the repository into `.cozmo/`. Later runs only re-embed files that changed.
 
 ## Usage
-
-**REPL commands**
 
 | Command | Action |
 |---|---|
 | `/ask` `/plan` `/agent` | Switch mode |
 | `/sessions` | List recent sessions |
-| `/continue [id]` | Resume a session (latest if no id) |
-| `/export md\|json` | Export the session audit trail |
+| `/continue [id]` | Resume a session (the latest if no id) |
+| `/export md\|json` | Export the session |
 | `/compact` | Summarize older turns now |
-| `/clear` | Reset conversation memory |
-| `/config` `/setup` | Show config path / re-run setup |
+| `/clear` | Start the conversation fresh |
 | `/exit` | Quit |
 
-Each turn ends with a footer showing tokens, estimated cost, `ctx≈N/budget`, steps and the stop reason.
-
-**Commands**
+Each turn ends with a footer: tokens, estimated cost, `ctx≈N/budget`, steps and the stop reason. When old results are cleared you see `cleared 3 old tool result(s), ~4,200 tokens`.
 
 | Command | Description |
 |---|---|
-| `cozmo` / `cozmo agent` | Interactive agent |
-| `cozmo chat` | Plain chat, no tools |
 | `cozmo index` | Rebuild the code index |
-| `cozmo eval` | Golden agent tasks + groundedness / citation eval |
-| `cozmo doctor` | Show the effective settings |
-| `cozmo config --show` | Print config (keys masked) |
+| `cozmo eval` | Golden tasks and the groundedness check |
+| `cozmo doctor` | Show the settings in effect |
+| `cozmo chat` | Plain chat, no tools |
 
 <details>
 <summary><b>Configuration reference</b></summary>
 
-Precedence, highest first: CLI flags → `COZMO_*` env → `.env` → `<repo>/.cozmo/config.json` → `~/.cozmo/config.json` → defaults.
+Highest first: CLI flags → `COZMO_*` env → `.env` → `<repo>/.cozmo/config.json` → `~/.cozmo/config.json` → defaults.
 
 ```json
 {
@@ -222,16 +214,17 @@ Precedence, highest first: CLI flags → `COZMO_*` env → `.env` → `<repo>/.c
   "max_cost_usd": 0.50,
   "session_timeout_s": 600,
   "context_token_budget": 24000,
+  "keep_tool_results": 6,
   "vector_backend": "chroma"
 }
 ```
 
 | Path | Contents |
 |---|---|
-| `<repo>/.cozmo/chroma/`, `index.json` | Code vector index |
-| `<repo>/.cozmo/history/*.jsonl` | Session events |
-| `<repo>/.cozmo/permissions.json` | Saved allow / deny rules |
-| `<repo>/.cozmo/traces.jsonl` | LLM and tool telemetry |
+| `<repo>/.cozmo/chroma/`, `index.json` | Code index |
+| `<repo>/.cozmo/history/*.jsonl` | Session logs |
+| `<repo>/.cozmo/permissions.json` | Saved allow and deny rules |
+| `<repo>/.cozmo/traces.jsonl` | Model and tool traces |
 
 </details>
 
@@ -251,7 +244,7 @@ Add to `~/.cozmo/config.json` or `<repo>/.cozmo/config.json`:
 ]
 ```
 
-A server that fails to start is skipped with a warning, and the others still connect. MCP tools are hidden in `/ask` and `/plan`. Set `COZMO_MCP_DISABLED=1` to turn MCP off.
+A server that fails to start is skipped with a warning. MCP tools are hidden in `/ask` and `/plan`. Set `COZMO_MCP_DISABLED=1` to turn MCP off.
 </details>
 
 ## Development
@@ -262,20 +255,20 @@ cd cozmo
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,mcp]"
 
-pytest --cov=cozmo                     # 188 tests, offline, coverage gate at 75%
-ruff check . && ruff format --check .  # lint + format
-mypy                                   # type-check
-cozmo eval                             # golden agent eval
-python benchmarks/run_retrieval.py --embedder ollama   # retrieval benchmark
+pytest --cov=cozmo                      # 200 tests, offline, coverage gate at 75%
+ruff check . && ruff format --check .   # lint and format
+mypy                                    # types
+cozmo eval                              # golden tasks
+python benchmarks/run_retrieval.py --embedder ollama
 ```
 
-Set `COZMO_DEBUG_CURL=1` to print each LLM request as a ready-to-run `curl` command (keys redacted).
+Set `COZMO_DEBUG_CURL=1` to print each model request as a ready-to-run `curl` command, with keys removed.
 
 ## Privacy
 
-- Your code index, sessions and permissions stay in `.cozmo/` inside your repository. Your key stays in `~/.cozmo/config.json`, readable only by you.
-- Tools cannot read or write outside the workspace root. Shell access is off until you turn it on.
-- Code is sent only to the model provider you configured. With Ollama, nothing leaves your machine.
+- The index, sessions and permissions stay in `.cozmo/` inside your repository. Your key stays in `~/.cozmo/config.json`, readable only by you.
+- Tools cannot read or write outside the project folder. Shell access is off until you turn it on.
+- Code goes only to the provider you configured. With Ollama, nothing leaves your machine.
 
 ## Contributing
 
