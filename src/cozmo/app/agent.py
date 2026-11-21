@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from cozmo.app.compaction import compact_memory, needs_compaction
+from cozmo.app.context_editing import clear_old_tool_results
 from cozmo.app.history import SessionHistory
 from cozmo.app.model_router import ModelRouter
 from cozmo.app.permissions import PermissionGate
@@ -27,7 +28,7 @@ from cozmo.prompts.loader import load_system_prompt
 
 @dataclass(frozen=True)
 class AgentEvent:
-    kind: str  # thinking | assistant | tool_call | tool_result | permission | compact | done | stopped
+    kind: str  # thinking | assistant | tool_call | tool_result | permission | context | compact | done | stopped
     text: str = ""
     tool_name: str = ""
     stop_reason: str = ""
@@ -136,7 +137,22 @@ class AgentRunner:
         if self._history:
             self._history.user_turn(user_text)
 
-        # Soft guardrail: compact before building the prompt when over budget.
+        # Cheapest first: old tool results become one-line notes (no model call).
+        trimmed, report = clear_old_tool_results(
+            self._memory.snapshot(), keep_recent=self._policy.keep_tool_results
+        )
+        if report.cleared:
+            self._memory.replace_history(trimmed)
+            if self._tracer:
+                self._tracer.emit(
+                    "context_cleared", results=report.cleared, chars=report.chars_freed
+                )
+            yield AgentEvent(
+                kind="context",
+                text=f"cleared {report.cleared} old tool result(s), ~{report.chars_freed // 4:,} tokens",
+            )
+
+        # Then, only if still over budget: summarize older turns with the orchestrator model.
         if needs_compaction(self._memory, self._policy):
             summary = compact_memory(
                 self._memory,

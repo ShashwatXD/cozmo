@@ -89,6 +89,7 @@ def _settings_to_user_dict(settings: Settings) -> dict[str, Any]:
         "memory_max_messages": settings.memory_max_messages,
         "max_messages_before_compact": settings.max_messages_before_compact,
         "context_token_budget": settings.context_token_budget,
+        "keep_tool_results": settings.keep_tool_results,
         "max_tool_calls_per_session": settings.max_tool_calls_per_session,
         "max_cost_usd": settings.max_cost_usd,
         "session_timeout_s": settings.session_timeout_s,
@@ -926,6 +927,10 @@ def _agent_once(
                 act.stop()
                 compacted = True
                 ux.print_dim("memory compacted")
+                act.thinking()
+            elif event.kind == "context":
+                act.stop()
+                ux.print_dim(event.text)
                 act.thinking()
             elif event.kind == "permission":
                 act.stop()

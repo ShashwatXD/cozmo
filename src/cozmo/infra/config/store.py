@@ -27,6 +27,7 @@ USER_CONFIG_KEYS = frozenset(
         "memory_max_messages",
         "max_messages_before_compact",
         "context_token_budget",
+        "keep_tool_results",
         "max_tool_calls_per_session",
         "max_cost_usd",
         "session_timeout_s",

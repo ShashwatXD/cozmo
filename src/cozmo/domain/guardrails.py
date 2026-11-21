@@ -24,6 +24,7 @@ class AgentPolicy:
     max_messages_before_compact: int = 30
     memory_max_messages: int = 40
     context_token_budget: int = 24_000
+    keep_tool_results: int = 6
     max_tool_calls_per_session: int = 40
     max_cost_usd: float | None = None
     session_timeout_s: float | None = 600.0
@@ -90,6 +91,7 @@ class AgentPolicy:
             "max_messages_before_compact": getattr(settings, "max_messages_before_compact", 30),
             "memory_max_messages": getattr(settings, "memory_max_messages", 40),
             "context_token_budget": getattr(settings, "context_token_budget", 24_000),
+            "keep_tool_results": getattr(settings, "keep_tool_results", 6),
             "max_tool_calls_per_session": getattr(settings, "max_tool_calls_per_session", 40),
             "max_cost_usd": getattr(settings, "max_cost_usd", None),
             "session_timeout_s": getattr(settings, "session_timeout_s", 600.0),

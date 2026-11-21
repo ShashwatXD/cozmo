@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     memory_max_messages: int = 40
     max_messages_before_compact: int = 30
     context_token_budget: int = 24_000
+    # Tool results older than the newest N become a one-line note; the model re-fetches if needed.
+    keep_tool_results: int = 6
     max_tool_calls_per_session: int = 40
     max_cost_usd: float | None = None
     session_timeout_s: float | None = 600.0
