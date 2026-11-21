@@ -218,3 +218,24 @@ def test_json_export_round_trips() -> None:
     assert payload["index"] == {"model": "m"}
     restored = [SessionEvent.from_dict(e) for e in payload["events"]]
     assert restored == _events()
+
+
+def test_gemini_uses_the_openai_compatible_endpoint_and_embeddings() -> None:
+    from cozmo.infra.llm.factory import GEMINI_BASE, _compat_base_url
+    from cozmo.infra.rag.factory import resolve_embedder
+    from cozmo.settings import Settings
+
+    s = Settings(provider="gemini", model="gemini-3.8-flash", api_key="AIza-test")
+    assert _compat_base_url(s) == GEMINI_BASE
+    assert resolve_embedder(s) == ("gemini", "gemini-embedding-001")
+
+
+def test_tool_call_provider_extras_round_trip() -> None:
+    from cozmo.domain.messages import Message, Role
+    from cozmo.domain.tools import ToolCall
+    from cozmo.infra.llm.openai_compatible import _to_api_messages
+
+    sig = {"google": {"thought_signature": "abc"}}
+    call = ToolCall(id="1", name="read_file", arguments="{}", extra=sig)
+    api = _to_api_messages([Message(role=Role.ASSISTANT, content="", tool_calls=(call,))])
+    assert api[0]["tool_calls"][0]["extra_content"] == sig

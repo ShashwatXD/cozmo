@@ -23,17 +23,7 @@ def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
                 {
                     "role": "assistant",
                     "content": m.content or None,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": tc.arguments,
-                            },
-                        }
-                        for tc in m.tool_calls
-                    ],
+                    "tool_calls": [_tool_call_to_api(tc) for tc in m.tool_calls],
                 }
             )
         elif m.role == Role.TOOL:
@@ -48,6 +38,24 @@ def _to_api_messages(messages: list[Message]) -> list[dict[str, Any]]:
         else:
             out.append({"role": m.role.value, "content": m.content})
     return out
+
+
+def _tool_call_to_api(tc: ToolCall) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "id": tc.id,
+        "type": "function",
+        "function": {"name": tc.name, "arguments": tc.arguments},
+    }
+    if tc.extra:
+        item["extra_content"] = tc.extra
+    return item
+
+
+def _extra_content(raw: Any) -> dict | None:
+    """Fields a provider adds to a tool call and expects back (Gemini thought signatures)."""
+    extra = getattr(raw, "model_extra", None) or {}
+    value = extra.get("extra_content")
+    return value if isinstance(value, dict) else None
 
 
 class OpenAICompatibleClient:
@@ -121,6 +129,7 @@ class OpenAICompatibleClient:
                     id=tc.id,
                     name=tc.function.name,
                     arguments=tc.function.arguments or "{}",
+                    extra=_extra_content(tc),
                 )
             )
 

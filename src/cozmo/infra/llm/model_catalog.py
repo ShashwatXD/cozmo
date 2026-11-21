@@ -208,6 +208,10 @@ def validate_and_list(
         return validate_and_list_anthropic(api_key)
     if provider == "openrouter":
         return validate_and_list_openrouter(api_key)
+    if provider == "gemini":
+        from cozmo.infra.llm.factory import GEMINI_BASE
+
+        return validate_and_list_openai(api_key, base_url=base_url or GEMINI_BASE)
     if provider == "ollama":
         return list_ollama_models(base_url or "http://127.0.0.1:11434")
     return ModelCatalogResult(ok=False, error=f"No model catalog for provider={provider}")

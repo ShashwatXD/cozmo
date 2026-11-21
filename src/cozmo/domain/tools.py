@@ -28,6 +28,9 @@ class ToolCall:
     id: str
     name: str
     arguments: str
+    # Provider data that must be sent back unchanged with this call, e.g. Gemini's
+    # thought signature ({"google": {"thought_signature": ...}}).
+    extra: dict | None = None
 
 
 @dataclass(frozen=True)

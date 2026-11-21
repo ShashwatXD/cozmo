@@ -9,7 +9,9 @@ from cozmo.settings import Settings
 
 _OLLAMA_BASE = "http://127.0.0.1:11434/v1"
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-_OPENAI_COMPAT = frozenset({"openai", "openrouter"})
+# Gemini serves an OpenAI-compatible API, so it reuses the same client.
+GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai/"
+_OPENAI_COMPAT = frozenset({"openai", "openrouter", "gemini"})
 
 
 def build_llm(settings: Settings) -> LLMClient:
@@ -24,6 +26,8 @@ def _compat_base_url(settings: Settings) -> str | None:
         return settings.base_url
     if settings.provider == "openrouter":
         return _OPENROUTER_BASE
+    if settings.provider == "gemini":
+        return GEMINI_BASE
     return None
 
 
@@ -63,5 +67,5 @@ def _build_inner(settings: Settings) -> LLMClient:
 
     raise ValueError(
         f"Unknown provider '{settings.provider}'. "
-        "Supported: stub, openai, anthropic, openrouter, ollama"
+        "Supported: stub, openai, anthropic, openrouter, gemini, ollama"
     )

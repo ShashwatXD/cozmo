@@ -11,6 +11,7 @@ from cozmo.settings import Settings
 
 _OLLAMA_BASE = "http://127.0.0.1:11434/v1"
 _OPENAI_EMBED_MODEL = "text-embedding-3-small"
+_GEMINI_EMBED_MODEL = "gemini-embedding-001"
 _OLLAMA_EMBED_MODEL = "nomic-embed-text"
 
 
@@ -35,6 +36,8 @@ def resolve_embedder(settings: Settings) -> tuple[str, str]:
 
     if settings.provider in {"openai", "openrouter"} and settings.api_key:
         return "openai", _OPENAI_EMBED_MODEL
+    if settings.provider == "gemini" and settings.api_key:
+        return "gemini", _GEMINI_EMBED_MODEL
     if settings.provider == "ollama":
         return "ollama", _OLLAMA_EMBED_MODEL
     return "stub", "stub"
@@ -87,6 +90,18 @@ def build_embedder(settings: Settings) -> Embedder:
             model=model,
             api_key=settings.api_key,
             base_url=settings.base_url,
+            timeout_s=settings.timeout_s,
+        )
+
+    if backend == "gemini":
+        if not settings.api_key:
+            raise ValueError("COZMO_API_KEY is required for Gemini embeddings")
+        from cozmo.infra.llm.factory import GEMINI_BASE
+
+        return OpenAICompatibleEmbedder(
+            model=model,
+            api_key=settings.api_key,
+            base_url=settings.base_url or GEMINI_BASE,
             timeout_s=settings.timeout_s,
         )
 

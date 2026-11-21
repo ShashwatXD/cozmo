@@ -91,6 +91,7 @@ def run_setup(*, non_interactive: bool = False) -> Path:
             ("openai", "OpenAI"),
             ("anthropic", "Anthropic (Claude)"),
             ("openrouter", "OpenRouter"),
+            ("gemini", "Google Gemini"),
             ("ollama", "Ollama (local)"),
             ("custom", "Custom OpenAI-compatible URL"),
             ("stub", "Stub (offline tests)"),
@@ -174,7 +175,7 @@ def run_setup(*, non_interactive: bool = False) -> Path:
         elif provider == "openai":
             if data.get("base_url") and "openai.com" not in str(data.get("base_url")):
                 data["base_url"] = None
-        elif provider == "anthropic":
+        elif provider in {"anthropic", "gemini"}:
             data.pop("base_url", None)
 
         data["model"] = _pick_model(
@@ -189,6 +190,8 @@ def run_setup(*, non_interactive: bool = False) -> Path:
         data["embedding_model"] = "nomic-embed-text"
     elif data.get("provider") in {"openai", "openrouter"}:
         data["embedding_model"] = "text-embedding-3-small"
+    elif data.get("provider") == "gemini":
+        data["embedding_model"] = "gemini-embedding-001"
 
     data["allow_write"] = ux.confirm(
         "Allow file writes?", default=bool(data.get("allow_write", True))

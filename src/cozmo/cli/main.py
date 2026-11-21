@@ -563,7 +563,7 @@ def root(
     message: str | None = typer.Option(None, "--message", "-m", help="One-shot task (skip REPL)"),
     workdir: Path | None = typer.Option(None, "--workdir", "-w", help="Repo root (default: cwd)"),
     provider: str | None = typer.Option(
-        None, "--provider", "-p", help="stub | openai | anthropic | openrouter | ollama"
+        None, "--provider", "-p", help="stub | openai | anthropic | openrouter | gemini | ollama"
     ),
     model: str | None = typer.Option(None, "--model", help="Model id"),
     no_index: bool = typer.Option(False, "--no-index", help="Skip auto-index on first launch"),
@@ -605,7 +605,7 @@ def chat(
     stream: bool = typer.Option(True, "--stream/--no-stream"),
     json_mode: bool = typer.Option(False, "--json"),
     provider: str | None = typer.Option(
-        None, "--provider", "-p", help="stub | openai | anthropic | openrouter | ollama"
+        None, "--provider", "-p", help="stub | openai | anthropic | openrouter | gemini | ollama"
     ),
     model: str | None = typer.Option(None, "--model", help="Model id override"),
 ) -> None:
@@ -641,7 +641,7 @@ def agent(
     message: str | None = typer.Option(None, "--message", "-m"),
     workdir: Path | None = typer.Option(None, "--workdir", "-w"),
     provider: str | None = typer.Option(
-        None, "--provider", "-p", help="stub | openai | anthropic | openrouter | ollama"
+        None, "--provider", "-p", help="stub | openai | anthropic | openrouter | gemini | ollama"
     ),
     model: str | None = typer.Option(None, "--model", help="Model id override"),
     no_index: bool = typer.Option(False, "--no-index"),
