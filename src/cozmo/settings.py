@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     max_retries: int = 3
     # Cap completion size so low-credit OpenRouter accounts aren't rejected (402).
     max_tokens: int = 2048
+    # Thinking models (Gemini 3) spend output tokens on reasoning: "low" | "medium" | "high".
+    reasoning_effort: str | None = None
     allow_write: bool = True
     allow_shell: bool = False
     max_agent_steps: int = 8

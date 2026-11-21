@@ -21,6 +21,7 @@ USER_CONFIG_KEYS = frozenset(
         "timeout_s",
         "max_retries",
         "max_tokens",
+        "reasoning_effort",
         "allow_write",
         "allow_shell",
         "max_agent_steps",

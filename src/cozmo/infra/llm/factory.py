@@ -48,12 +48,15 @@ def _build_inner(settings: Settings) -> LLMClient:
     if settings.provider in _OPENAI_COMPAT:
         if not settings.api_key:
             raise ValueError(f"COZMO_API_KEY is required when provider={settings.provider}")
+        thinking = settings.provider == "gemini"
         return OpenAICompatibleClient(
             model=settings.model,
             api_key=settings.api_key,
             base_url=_compat_base_url(settings),
             timeout_s=settings.timeout_s,
-            max_tokens=settings.max_tokens,
+            # Thinking shares the output limit; leave room for the answer itself.
+            max_tokens=max(settings.max_tokens, 8192) if thinking else settings.max_tokens,
+            reasoning_effort=settings.reasoning_effort or ("low" if thinking else None),
         )
 
     if settings.provider == "ollama":

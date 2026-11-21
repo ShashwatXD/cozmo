@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cozmo Traces</title>
+<style>
+/* Layout: one column; a run table on top, the selected run's step timeline below it. */
+:root{
+  --bg:#f4f5f2;--surface:#fff;--sunk:#eceee9;--fg:#171a16;--muted:#5d655b;--line:#d9ddd5;
+  --accent:#2f6b3a;--accent-soft:#dcebdd;--bad:#a5352a;--bad-soft:#f6dfdb;--warn:#8a5b00;--warn-soft:#f5e8cc;
+  --llm:#2f6b3a;--tool:#4b5fa8;--ctx:#8a5b00;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#121411;--surface:#1a1d19;--sunk:#22261f;--fg:#e6e9e2;--muted:#9aa395;--line:#2e332b;
+  --accent:#7cc487;--accent-soft:#1f3322;--bad:#ff9184;--bad-soft:#3a1f1b;--warn:#f0bf5a;--warn-soft:#352a12;
+  --llm:#7cc487;--tool:#9aaaf0;--ctx:#f0bf5a;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 var(--sans)}
+.wrap{max-width:1180px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-left)) 64px;display:grid;gap:18px}
+.wrap>*{min-width:0}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
+h1{font:700 22px/1.2 var(--mono);margin:0;letter-spacing:-.01em}
+.ws{color:var(--muted);font:12px var(--mono);overflow-wrap:anywhere}
+.tabs{display:flex;gap:6px;margin-left:auto}
+.tabs button,.btn{font:500 13px var(--sans);background:var(--sunk);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:2px}
+.card b{font:700 22px/1.2 var(--mono);font-variant-numeric:tabular-nums}
+.card span{color:var(--muted);font-size:12px}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.table{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:760px}
+th{text-align:left;font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+tbody tr{cursor:pointer}tbody tr:hover,tbody tr.on{background:var(--sunk)}
+td.q{white-space:normal;width:100%;max-width:0;overflow:hidden;text-overflow:ellipsis}
+td.q div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.num{font-family:var(--mono);font-size:12.5px}
+.chip{display:inline-block;font:600 11px/1 var(--mono);padding:4px 7px;border-radius:999px;background:var(--sunk);color:var(--muted)}
+.chip.ok{background:var(--accent-soft);color:var(--accent)}.chip.bad{background:var(--bad-soft);color:var(--bad)}.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.empty{color:var(--muted);padding:28px 14px;text-align:center}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:12px}
+.panel[hidden],section[hidden]{display:none}
+.panel h2{font:600 16px/1.35 var(--sans);margin:0}
+.meta{color:var(--muted);font-size:13px}
+.row{display:grid;grid-template-columns:150px minmax(0,1fr) 80px;gap:4px 12px;align-items:center;padding:6px 0;border-top:1px dashed var(--line)}
+.row:first-of-type{border-top:0}
+.name{font:600 12px var(--mono)}
+.name.llm{color:var(--llm)}.name.tool{color:var(--tool)}.name.ctx{color:var(--ctx)}
+.track{position:relative;height:8px;background:var(--sunk);border-radius:99px}
+.track i{position:absolute;top:0;bottom:0;border-radius:99px;background:var(--muted)}
+.track i.llm{background:var(--llm)}.track i.tool{background:var(--tool)}.track i.ctx{background:var(--ctx)}
+.ms{font:12px var(--mono);color:var(--muted);text-align:right}
+.facts{grid-column:2/4;font:12px var(--mono);color:var(--muted);overflow-wrap:anywhere}
+.more{grid-column:2/4;justify-self:start;background:none;border:0;padding:0;color:var(--accent);font:13px var(--sans);text-decoration:underline;cursor:pointer}
+.detail{grid-column:1/4;display:grid;gap:8px;background:var(--sunk);border-radius:10px;padding:12px;margin:4px 0 8px}
+.detail[hidden]{display:none}
+details.blk{background:var(--surface);border-radius:8px;border:1px solid var(--line)}
+details.blk summary{cursor:pointer;padding:7px 10px;font:12px var(--mono);color:var(--muted)}
+details.blk pre{margin:0;padding:0 10px 10px;font:12px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto}
+.answer{white-space:pre-wrap;background:var(--sunk);border-radius:10px;padding:12px;font-size:13.5px;max-height:360px;overflow:auto}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:640px){.row{grid-template-columns:96px minmax(0,1fr) 60px}.tabs{margin-left:0}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>cozmo traces</h1>
+    <span class="ws" id="ws"></span>
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tab-turns" aria-selected="true">Turns</button>
+      <button role="tab" id="tab-evals" aria-selected="false">Evals</button>
+      <button class="btn" id="refresh" title="Read the files again">Refresh</button>
+    </nav>
+  </header>
+
+  <section id="view-turns">
+    <div class="cards" id="cards"></div>
+    <div class="filters" style="margin:12px 0">
+      <button class="btn" data-f="all">All</button>
+      <button class="btn" data-f="chat">Your sessions</button>
+      <button class="btn" data-f="eval">Eval runs</button>
+    </div>
+    <div class="table"><table><thead><tr>
+      <th>When</th><th>Question</th><th>Mode</th><th>Model</th><th>LLM</th><th>Tools</th><th>Tokens</th><th>Cost</th><th>Time</th><th>Grounded</th><th>Stop</th>
+    </tr></thead><tbody id="turns"></tbody></table></div>
+  </section>
+
+  <section id="view-evals" hidden>
+    <div class="table"><table><thead><tr>
+      <th>When</th><th>Kind</th><th>Model</th><th>Passed</th><th>Pass rate</th>
+    </tr></thead><tbody id="runs"></tbody></table></div>
+  </section>
+
+  <section class="panel" id="detail" hidden></section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+const when = (ts) => new Date(ts * 1000).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const usd = (v) => (v ? `$${v < 0.01 ? v.toFixed(4) : v.toFixed(3)}` : "—");
+const secs = (v) => (v || v === 0 ? `${Number(v).toFixed(1)} s` : "—");
+const median = (xs) => { if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+const pretty = (v) => (typeof v === "string" ? v : JSON.stringify(v, null, 2));
+let turns = [], filter = "all";
+
+function chip(text, kind) { return el("span", `chip ${kind || ""}`, text); }
+function groundedChip(score) {
+  if (score === null || score === undefined) return chip("—");
+  return chip(String(score), score >= 70 ? "ok" : score >= 40 ? "warn" : "bad");
+}
+function stopChip(t) {
+  if (t.cut_off) return chip("cut off", "bad");
+  return chip(t.stop_reason || "—", t.stop_reason === "completed" ? "ok" : "bad");
+}
+
+function renderCards() {
+  const shown = turns.filter(match);
+  const g = shown.map((t) => t.groundedness).filter((x) => x !== null && x !== undefined);
+  const items = [
+    [String(shown.length), "turns"],
+    [secs(median(shown.map((t) => t.duration_s))), "median time"],
+    [usd(shown.reduce((n, t) => n + (t.cost_usd || 0), 0)), "spent"],
+    [g.length ? String(Math.round(g.reduce((a, b) => a + b, 0) / g.length)) : "—", "avg groundedness"],
+    [String(shown.filter((t) => t.stop_reason && t.stop_reason !== "completed").length), "stopped early"],
+  ];
+  $("cards").replaceChildren(...items.map(([v, l]) => { const c = el("div", "card"); c.append(el("b", "", v), el("span", "", l)); return c; }));
+}
+const match = (t) => filter === "all" || (filter === "eval" ? t.is_eval : !t.is_eval);
+
+function renderTurns() {
+  renderCards();
+  const body = $("turns");
+  const shown = turns.filter(match);
+  if (!shown.length) {
+    const r = el("tr"); const c = el("td", "empty", "No traces yet. Ask Cozmo something, or run `cozmo eval`, then refresh."); c.colSpan = 11; r.append(c); body.replaceChildren(r); return;
+  }
+  body.replaceChildren(...shown.map((t) => {
+    const r = el("tr"); r.tabIndex = 0;
+    const q = el("td", "q"); q.append(el("div", "", t.question));
+    r.append(el("td", "num", when(t.started_at)), q, el("td", "", t.mode || (t.is_eval ? "eval" : "")), el("td", "num", t.model || ""),
+      el("td", "num", String(t.llm_calls)), el("td", "num", t.tool_errors ? `${t.tool_calls} (${t.tool_errors} err)` : String(t.tool_calls)),
+      el("td", "num", (t.tokens || 0).toLocaleString()), el("td", "num", usd(t.cost_usd)), el("td", "num", secs(t.duration_s)));
+    const g = el("td"); g.append(groundedChip(t.groundedness)); const s = el("td"); s.append(stopChip(t)); r.append(g, s);
+    const open = () => { document.querySelectorAll("#turns tr.on").forEach((x) => x.classList.remove("on")); r.classList.add("on"); showTurn(t.id); };
+    r.onclick = open; r.onkeydown = (e) => { if (e.key === "Enter") open(); };
+    return r;
+  }));
+}
+
+function block(label, text, open) {
+  const d = el("details", "blk"); d.open = !!open;
+  d.append(el("summary", "", `${label} · ${String(text).length.toLocaleString()} chars`), el("pre", "", String(text) || "(empty)"));
+  return d;
+}
+
+function stepRow(ev, t0, total) {
+  const d = ev.data || {};
+  const kind = ev.kind === "llm" ? "llm" : ev.kind === "tool" ? "tool" : "ctx";
+  const label = ev.kind === "llm" ? `llm · step ${d.step}` : ev.kind === "tool" ? d.name : ev.kind.replace("_", " ");
+  const ms = d.latency_ms || 0;
+  const start = Math.max(0, (ev.ts - t0) * 1000 - ms);
+  const row = el("div", "row");
+  const track = el("div", "track"); const bar = el("i", kind);
+  bar.style.left = `${(start / total) * 100}%`; bar.style.width = `${Math.max((ms / total) * 100, 0.8)}%`; track.append(bar);
+  row.append(el("div", `name ${kind}`, label), track, el("div", "ms", ms ? `${Math.round(ms).toLocaleString()} ms` : ""));
+  const facts = [];
+  if (ev.kind === "llm") {
+    facts.push(`in ${d.prompt_tokens ?? "?"} · out ${d.completion_tokens ?? "?"}`, usd(d.cost_usd), `finish: ${d.finish_reason}`);
+    if (d.tool_calls?.length) facts.push(`asked for: ${d.tool_calls.map((c) => c.name).join(", ")}`);
+    else if (d.response) facts.push(`wrote ${d.response.length} chars`);
+  } else if (ev.kind === "tool") {
+    facts.push(d.is_error ? "ERROR" : "ok", `${(d.result_chars || 0).toLocaleString()} chars`);
+  } else {
+    facts.push(Object.entries(d).filter(([, v]) => typeof v !== "object").map(([k, v]) => `${k}: ${String(v).slice(0, 120)}`).join(" · "));
+  }
+  row.append(el("div", "facts", facts.join("  ·  ")));
+  if (ev.kind === "llm" || ev.kind === "tool" || d.summary) {
+    const btn = el("button", "more", "Show more details"); const box = el("div", "detail"); box.hidden = true;
+    btn.onclick = () => {
+      if (!box.childElementCount) {
+        if (ev.kind === "llm") {
+          if (d.response) box.append(block("Reply text", d.response, true));
+          if (d.tool_calls?.length) box.append(block("Tools it asked for", d.tool_calls.map((c) => `${c.name}(${c.arguments})`).join("\n\n"), true));
+          box.append(block(`Request: ${d.messages?.length || 0} messages sent`, (d.messages || []).map((m, i) =>
+            `── ${i + 1}. ${m.role}${m.name ? ` (${m.name})` : ""}\n${m.content || ""}${m.tool_calls ? `\n→ ${m.tool_calls.map((c) => `${c.name}(${c.arguments})`).join("\n→ ")}` : ""}`).join("\n\n")));
+          box.append(block("Tools offered", (d.tools || []).join("\n")));
+        } else if (ev.kind === "tool") {
+          box.append(block("Arguments", pretty(safeJson(d.arguments)), true), block("Result sent to the model", d.result, true));
+        } else {
+          box.append(block("Details", pretty(d), true));
+        }
+      }
+      box.hidden = !box.hidden; btn.textContent = box.hidden ? "Show more details" : "Hide details";
+    };
+    row.append(btn, box);
+  }
+  return row;
+}
+function safeJson(s) { try { return JSON.parse(s); } catch { return s; } }
+
+async function showTurn(id) {
+  const res = await fetch(`/api/turn?id=${encodeURIComponent(id)}`); if (!res.ok) return;
+  const { summary: s, events } = await res.json();
+  const panel = $("detail"); panel.hidden = false;
+  const steps = events.filter((e) => ["llm", "tool", "context_cleared", "compact", "stuck"].includes(e.kind));
+  const t0 = events[0].ts; const total = Math.max(1, (events[events.length - 1].ts - t0) * 1000);
+  const done = events.find((e) => e.kind === "agent_done")?.data || {};
+  const parts = [el("h2", "", s.question), el("p", "meta",
+    `${s.model} · ${s.mode || "agent"} · ${s.llm_calls} model call(s), ${s.tool_calls} tool call(s) · ${(s.tokens || 0).toLocaleString()} tokens · ${usd(s.cost_usd)} · ${secs(s.duration_s)} · stop: ${s.stop_reason}`)];
+  if (s.cut_off) parts.push(el("p", "meta", "⚠ A model reply hit its output limit (finish: length), so the answer may be cut off. Raise max_tokens or lower the model's thinking."));
+  parts.push(...steps.map((e) => stepRow(e, t0, total)));
+  if (done.answer) parts.push(el("div", "meta", "Final answer"), el("div", "answer", done.answer));
+  if (done.groundedness) {
+    const g = done.groundedness;
+    parts.push(el("p", "meta", `Groundedness ${g.score}/100 · ${g.summary}${g.invalid_citations ? ` · ${g.invalid_citations} citation(s) point to lines that were never read` : ""}`));
+    if (g.unsupported?.length) parts.push(block("Claims without support in what was read", g.unsupported.join("\n\n"), false));
+  }
+  panel.replaceChildren(...parts);
+  panel.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
+}
+
+async function loadEvals() {
+  const { runs } = await (await fetch("/api/evals")).json();
+  const body = $("runs");
+  if (!runs.length) { const r = el("tr"); const c = el("td", "empty", "No eval runs yet. Run `cozmo eval` (or `cozmo eval --live`) and refresh."); c.colSpan = 5; r.append(c); body.replaceChildren(r); return; }
+  body.replaceChildren(...runs.map((run) => {
+    const r = el("tr"); r.tabIndex = 0;
+    const rate = run.total ? Math.round((100 * run.passed) / run.total) : 0;
+    const pc = el("td"); pc.append(chip(`${rate}%`, rate === 100 ? "ok" : rate >= 70 ? "warn" : "bad"));
+    r.append(el("td", "num", when(run.created_at)), el("td", "", run.live ? "live" : "stub"), el("td", "num", run.model || ""), el("td", "num", `${run.passed}/${run.total}`), pc);
+    const open = () => { document.querySelectorAll("#runs tr.on").forEach((x) => x.classList.remove("on")); r.classList.add("on"); showRun(run.id); };
+    r.onclick = open; r.onkeydown = (e) => { if (e.key === "Enter") open(); };
+    return r;
+  }));
+}
+
+async function showRun(id) {
+  const run = await (await fetch(`/api/eval?id=${encodeURIComponent(id)}`)).json();
+  const panel = $("detail"); panel.hidden = false;
+  const wrap = el("div", "table"); const t = el("table");
+  const head = el("tr"); for (const h of ["Suite", "Case", "Result", "Detail", "Time", "Tokens", ""]) head.append(el("th", "", h));
+  const tb = el("tbody");
+  for (const c of run.results) {
+    const r = el("tr");
+    const res = el("td"); res.append(chip(c.passed ? "pass" : "fail", c.passed ? "ok" : "bad"));
+    const det = el("td", "q"); det.append(el("div", "", c.detail)); det.title = c.detail;
+    const link = el("td");
+    if (c.turn_id) { const b = el("button", "more", "open trace"); b.onclick = (e) => { e.stopPropagation(); select("turns"); showTurn(c.turn_id); }; link.append(b); }
+    r.append(el("td", "", c.suite), el("td", "num", c.case_id), res, det, el("td", "num", c.duration_s ? secs(c.duration_s) : "—"), el("td", "num", c.tokens ? c.tokens.toLocaleString() : "—"), link);
+    tb.append(r);
+  }
+  const th = el("thead"); th.append(head); t.append(th, tb); wrap.append(t);
+  panel.replaceChildren(el("h2", "", `Eval run ${run.id}`), el("p", "meta", `${run.live ? "live" : "stub"} · ${run.provider}/${run.model} · ${run.passed}/${run.total} passed`), wrap);
+}
+
+function select(tab) {
+  for (const name of ["turns", "evals"]) { $(`tab-${name}`).setAttribute("aria-selected", String(name === tab)); $(`view-${name}`).hidden = name !== tab; }
+  $("detail").hidden = true;
+  if (tab === "evals") loadEvals();
+}
+async function loadTurns() {
+  const data = await (await fetch("/api/turns")).json();
+  $("ws").textContent = data.workspace; turns = data.turns; renderTurns();
+}
+$("tab-turns").onclick = () => select("turns");
+$("tab-evals").onclick = () => select("evals");
+$("refresh").onclick = () => { loadTurns(); if (!$("view-evals").hidden) loadEvals(); };
+document.querySelectorAll("[data-f]").forEach((b) => (b.onclick = () => { filter = b.dataset.f; renderTurns(); }));
+loadTurns();
+</script>
+</body>
+</html>

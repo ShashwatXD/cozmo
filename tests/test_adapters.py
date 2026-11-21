@@ -239,3 +239,26 @@ def test_tool_call_provider_extras_round_trip() -> None:
     call = ToolCall(id="1", name="read_file", arguments="{}", extra=sig)
     api = _to_api_messages([Message(role=Role.ASSISTANT, content="", tool_calls=(call,))])
     assert api[0]["tool_calls"][0]["extra_content"] == sig
+
+
+def test_thinking_tokens_count_as_output() -> None:
+    """Gemini reports thinking only in total_tokens; it is billed as output."""
+    from types import SimpleNamespace as NS
+
+    from cozmo.infra.llm.openai_compatible import OpenAICompatibleClient
+
+    client = OpenAICompatibleClient(model="gemini-3.8-flash", api_key="k", reasoning_effort="low")
+    sent: dict = {}
+
+    def create(**kw):
+        sent.update(kw)
+        msg = NS(content="done", tool_calls=None)
+        return NS(
+            choices=[NS(message=msg, finish_reason="stop")],
+            usage=NS(prompt_tokens=100, completion_tokens=20, total_tokens=1_120),
+        )
+
+    client._client = NS(chat=NS(completions=NS(create=create)))
+    out = client.complete([])
+    assert out.usage.completion_tokens == 1_020
+    assert sent["reasoning_effort"] == "low"

@@ -67,8 +67,10 @@ class OpenAICompatibleClient:
         base_url: str | None = None,
         timeout_s: float = 60.0,
         max_tokens: int = 2048,
+        reasoning_effort: str | None = None,
     ) -> None:
         self._model = model
+        self._reasoning_effort = reasoning_effort
         self._api_key = api_key
         self._base_url = (base_url or _DEFAULT_BASE).rstrip("/")
         self._max_tokens = max_tokens
@@ -103,6 +105,8 @@ class OpenAICompatibleClient:
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
+        if self._reasoning_effort:
+            kwargs["reasoning_effort"] = self._reasoning_effort
         if tools:
             kwargs["tools"] = [t.to_openai() for t in tools]
             kwargs["tool_choice"] = "auto"
@@ -116,10 +120,12 @@ class OpenAICompatibleClient:
         choice = resp.choices[0]
         usage = Usage()
         if resp.usage is not None:
-            usage = Usage(
-                prompt_tokens=resp.usage.prompt_tokens or 0,
-                completion_tokens=resp.usage.completion_tokens or 0,
-            )
+            prompt = resp.usage.prompt_tokens or 0
+            completion = resp.usage.completion_tokens or 0
+            # Some providers (Gemini) leave thinking out of completion_tokens but include it in
+            # total_tokens. It is billed as output, so count it there to keep cost honest.
+            total = getattr(resp.usage, "total_tokens", 0) or 0
+            usage = Usage(prompt_tokens=prompt, completion_tokens=max(completion, total - prompt))
 
         tool_calls: list[ToolCall] = []
         raw_calls = choice.message.tool_calls or []

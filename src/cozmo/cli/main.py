@@ -381,6 +381,7 @@ def _run_agent_session(
                     "  /sessions           list recent sessions\n"
                     "  /continue [id]      resume session (latest if no id)\n"
                     "  /export md|json     export current (or /export md <id>)\n"
+                    "  /trace              open the trace and eval dashboard\n"
                     "  /config             show config paths\n"
                     "  /setup              re-run provider wizard\n"
                     "  /exit               quit"
@@ -435,6 +436,11 @@ def _run_agent_session(
                 continue
             if raw == "/config":
                 typer.echo(f"  {user_config_path()}")
+                continue
+            if raw == "/trace":
+                from cozmo.cli.dashboard import open_in_background
+
+                ux.print_dim(f"traces → {open_in_background(root_dir)}")
                 continue
             if raw == "/setup":
                 run_setup(non_interactive=False)
@@ -665,6 +671,30 @@ def agent(
         auto_index=not no_index,
         mode=_resolve_mode(ask=ask, plan=plan),
     )
+
+
+@app.command("trace")
+def trace_cmd(
+    workdir: Path | None = typer.Option(None, "--workdir", "-w", help="Repo root (default: cwd)"),
+    port: int = typer.Option(7788, "--port", help="Local port (falls back to a free one)"),
+    no_open: bool = typer.Option(False, "--no-open", help="Do not open the browser"),
+) -> None:
+    """Open a local dashboard of traces and eval runs from .cozmo/."""
+    import webbrowser
+
+    from cozmo.cli.dashboard import start_server
+
+    root = (workdir or Path.cwd()).resolve()
+    server, url = start_server(root, port=port)
+    typer.secho(f"cozmo traces for {root} → {url}  (Ctrl+C to stop)", fg="cyan")
+    if not no_open:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        typer.echo()
+    finally:
+        server.server_close()
 
 
 @app.command("index")

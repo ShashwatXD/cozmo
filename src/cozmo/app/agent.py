@@ -236,6 +236,12 @@ class AgentRunner:
                 messages.append(Message(role=Role.ASSISTANT, content=result.content or ""))
                 self._commit_memory(messages)
                 text = result.content or ""
+                if result.finish_reason == "length":
+                    # Never present a truncated answer as complete.
+                    text += (
+                        "\n\n[answer cut off: the model reached its output limit. "
+                        "Raise max_tokens, or lower reasoning_effort]"
+                    )
                 self.last_result = AgentResult(
                     final_text=text,
                     usage=total_usage,
